@@ -27,18 +27,32 @@ class ImageConverter(QThread):
             try:
                 self.progress.emit(f"Converting {os.path.basename(image_path)}...")
                 
+                # Check if input file exists
+                if not os.path.exists(image_path):
+                    self.progress.emit(f"Error: Input file does not exist: {image_path}")
+                    continue
+                
                 # Open image and convert to grayscale
                 with Image.open(image_path) as img:
                     # Convert to grayscale
                     gray_img = ImageOps.grayscale(img)
                     
+                    # Convert to 1-bit (bilevel) using a fixed threshold so Group 4 is valid
+                    # Group 4 requires 1-bit images (BitsPerSample == 1)
+                    bw_img = gray_img.point(lambda x: 255 if x >= 128 else 0, mode='1')
+                    
                     # Create output path with .tif extension
                     output_path = os.path.splitext(image_path)[0] + '.tif'
                     
                     # Save as G4 TIFF
-                    gray_img.save(output_path, 'TIFF', compression='group4')
+                    bw_img.save(output_path, 'TIFF', compression='group4')
                     
-                    converted_files.append((image_path, output_path))
+                    # Verify output file was created
+                    if os.path.exists(output_path):
+                        converted_files.append((image_path, output_path))
+                        self.progress.emit(f"Successfully converted: {os.path.basename(output_path)}")
+                    else:
+                        self.progress.emit(f"Error: Output file was not created: {output_path}")
                     
             except Exception as e:
                 self.progress.emit(f"Error converting {image_path}: {str(e)}")
@@ -80,6 +94,10 @@ class ThumbnailWidget(QWidget):
         self.image_label.setGeometry(2, 2, 112, 112)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setScaledContents(True)
+        # Ensure clicks on the image go to the container (so on_image_clicked fires)
+        self.image_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
+        # Ensure the checkbox stays on top of the image
+        self.checkbox.raise_()
         
         layout.addWidget(self.image_container)
         
@@ -248,6 +266,8 @@ class MonochromeDetector(QMainWindow):
         for widget in self.thumbnail_widgets:
             widget.deleteLater()
         self.thumbnail_widgets.clear()
+        # Clear selected images set
+        self.selected_images.clear()
         
         # Create thumbnails in 4 column grid
         cols = 4
@@ -264,7 +284,20 @@ class MonochromeDetector(QMainWindow):
     
     def on_thumbnail_clicked(self, image_path):
         """Handle thumbnail click"""
-        self.selected_images.add(image_path)
+        # Find the widget that was clicked
+        clicked_widget = None
+        for widget in self.thumbnail_widgets:
+            if widget.image_path == image_path:
+                clicked_widget = widget
+                break
+        
+        if clicked_widget:
+            # Update selected_images set based on checkbox state
+            if clicked_widget.is_checked():
+                self.selected_images.add(image_path)
+            else:
+                self.selected_images.discard(image_path)
+        
         self.show_large_image(image_path)
     
     def show_large_image(self, image_path):
@@ -290,6 +323,10 @@ class MonochromeDetector(QMainWindow):
             if widget.is_checked():
                 selected_paths.append(widget.image_path)
         
+        print(f"Selected {len(selected_paths)} images for conversion:")
+        for path in selected_paths:
+            print(f"  - {os.path.basename(path)}")
+        
         if not selected_paths:
             QMessageBox.information(self, "No Selection", "Please select images to convert")
             return
@@ -302,11 +339,16 @@ class MonochromeDetector(QMainWindow):
     
     def show_progress(self, message):
         """Show conversion progress"""
-        print(message)  # Could be enhanced with a progress dialog
+        print(message)  # Print to console for debugging
+        # Update window title to show progress
+        self.setWindowTitle(f"Monochrome Detector - {message}")
     
     def on_conversion_finished(self, converted_files):
         """Handle conversion completion"""
         try:
+            # Reset window title
+            self.setWindowTitle("Monochrome Detector")
+            
             # Update source file with new .tif filenames
             self.update_source_file(converted_files)
             
@@ -316,6 +358,7 @@ class MonochromeDetector(QMainWindow):
             QMessageBox.information(self, "Success", f"Converted {len(converted_files)} images to G4 TIFF")
             
         except Exception as e:
+            self.setWindowTitle("Monochrome Detector")
             QMessageBox.critical(self, "Error", f"Failed to update files: {str(e)}")
     
     def update_source_file(self, converted_files):
