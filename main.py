@@ -139,30 +139,32 @@ class ThumbnailWidget(QWidget):
         super().__init__()
         self.image_path = image_path
         self.filename = filename
-        self.setFixedSize(120, 140)
+        # Default; will be overridden dynamically
+        self._cell_size = 140
+        self.setFixedSize(self._cell_size, self._cell_size)
         self.setup_ui()
         self.load_thumbnail()
     
     def setup_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(2, 2, 2, 2)
+        layout.setContentsMargins(0, 0, 0, 0)
         
         # Image container with checkbox overlay
         self.image_container = QFrame()
-        self.image_container.setFixedSize(116, 116)
+        self.image_container.setFixedSize(self._cell_size, self._cell_size)
         self.image_container.setStyleSheet("border: 1px solid #ccc;")
         self.image_container.mousePressEvent = self.on_image_clicked
         
         # Checkbox overlay
         self.checkbox = QCheckBox()
         self.checkbox.setParent(self.image_container)
-        self.checkbox.move(90, 5)
+        self.checkbox.move(max(0, self._cell_size - 30), 5)
         self.checkbox.stateChanged.connect(self.on_checkbox_changed)
         
         # Image label
         self.image_label = QLabel()
         self.image_label.setParent(self.image_container)
-        self.image_label.setGeometry(2, 2, 112, 112)
+        self.image_label.setGeometry(2, 2, self._cell_size - 4, self._cell_size - 24)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.image_label.setScaledContents(False)
         # Ensure clicks on the image go to the container (so on_image_clicked fires)
@@ -170,14 +172,17 @@ class ThumbnailWidget(QWidget):
         # Ensure the checkbox stays on top of the image
         self.checkbox.raise_()
         
-        layout.addWidget(self.image_container)
-        
-        # Filename label
-        self.filename_label = QLabel(self.filename)
+        # Filename overlay inside the cell (keeps the total cell square)
+        self.filename_label = QLabel(self.filename, self.image_container)
         self.filename_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.filename_label.setFont(QFont("Arial", 8))
+        self.filename_label.setStyleSheet(
+            "background-color: rgba(0,0,0,0.45); color: white; padding: 2px;"
+        )
         self.filename_label.setWordWrap(True)
-        layout.addWidget(self.filename_label)
+        self.filename_label.raise_()
+
+        layout.addWidget(self.image_container)
         
         self.setLayout(layout)
     
@@ -186,11 +191,33 @@ class ThumbnailWidget(QWidget):
         try:
             pixmap = QPixmap(self.image_path)
             if not pixmap.isNull():
-                # Scale to fit thumbnail size
-                scaled_pixmap = pixmap.scaled(110, 110, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                # Scale to fit current image label size
+                target_size = QSize(self.image_label.width(), self.image_label.height())
+                scaled_pixmap = pixmap.scaled(
+                    target_size,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
                 self.image_label.setPixmap(scaled_pixmap)
         except Exception as e:
             print(f"Error loading thumbnail {self.image_path}: {e}")
+
+    def set_cell_size(self, cell_size: int):
+        """Set the outer square cell size and update layout accordingly."""
+        if cell_size == self._cell_size:
+            return
+        self._cell_size = max(60, cell_size)
+        # Update outer widget and container
+        self.setFixedSize(self._cell_size, self._cell_size)
+        self.image_container.setFixedSize(self._cell_size, self._cell_size)
+        # Update child geometries
+        self.checkbox.move(max(0, self._cell_size - 30), 5)
+        # Reserve ~20px for filename bar
+        image_area_height = max(10, self._cell_size - 24)
+        self.image_label.setGeometry(2, 2, self._cell_size - 4, image_area_height)
+        self.filename_label.setGeometry(2, self._cell_size - 20, self._cell_size - 4, 18)
+        # Rescale pixmap
+        self.load_thumbnail()
     
     def on_image_clicked(self, event):
         """Handle image click"""
@@ -279,13 +306,16 @@ class MonochromeDetector(QMainWindow):
         # Grid widget for thumbnails
         self.thumbnail_grid = QWidget()
         self.grid_layout = QGridLayout()
-        self.grid_layout.setSpacing(5)
+        self.grid_layout.setSpacing(2)
         self.thumbnail_grid.setLayout(self.grid_layout)
         
         self.scroll_area.setWidget(self.thumbnail_grid)
         layout.addWidget(self.scroll_area)
         
         parent_layout.addWidget(thumbnail_container, 2)
+        
+        # Ensure initial sizing is applied after layout is ready
+        self.update_thumbnail_cell_sizes()
     
     def setup_image_view_panel(self, parent_layout):
         """Setup right panel for large image view"""
@@ -353,8 +383,8 @@ class MonochromeDetector(QMainWindow):
         # Clear selected images set
         self.selected_images.clear()
         
-        # Create thumbnails in 8 column grid
-        cols = 8
+        # Create thumbnails in 6 column grid
+        cols = 6
         for i, image_path in enumerate(self.image_files):
             row = i // cols
             col = i % cols
@@ -366,9 +396,32 @@ class MonochromeDetector(QMainWindow):
             self.grid_layout.addWidget(thumbnail, row, col)
             self.thumbnail_widgets.append(thumbnail)
         
+        # Apply responsive sizing to match current panel width
+        self.update_thumbnail_cell_sizes()
+
         # Update analyze action state
         if hasattr(self, 'analyze_action'):
             self.analyze_action.setEnabled(len(self.image_files) > 0)
+
+    def update_thumbnail_cell_sizes(self):
+        """Resize thumbnail cells to 15% of the thumbnail panel width (square)."""
+        try:
+            if not hasattr(self, 'scroll_area'):
+                return
+            panel_width = self.scroll_area.viewport().width()
+            if panel_width <= 0:
+                return
+            # 15% of panel width per cell; account for small spacing
+            target_size = int(max(60, panel_width * 0.15))
+            for widget in self.thumbnail_widgets:
+                widget.set_cell_size(target_size)
+        except Exception:
+            pass
+
+    def resizeEvent(self, event):
+        """Handle window resizing to keep thumbnails responsive."""
+        super().resizeEvent(event)
+        self.update_thumbnail_cell_sizes()
     
     def on_thumbnail_clicked(self, image_path):
         """Handle thumbnail click"""
