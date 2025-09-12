@@ -93,7 +93,7 @@ class ThumbnailWidget(QWidget):
         self.image_label.setParent(self.image_container)
         self.image_label.setGeometry(2, 2, 112, 112)
         self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.image_label.setScaledContents(True)
+        self.image_label.setScaledContents(False)
         # Ensure clicks on the image go to the container (so on_image_clicked fires)
         self.image_label.setAttribute(Qt.WidgetAttribute.WA_TransparentForMouseEvents, True)
         # Ensure the checkbox stays on top of the image
@@ -220,7 +220,7 @@ class MonochromeDetector(QMainWindow):
         self.large_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.large_image_label.setStyleSheet("border: 1px solid #ccc; background-color: #f0f0f0;")
         self.large_image_label.setMinimumSize(400, 500)
-        self.large_image_label.setScaledContents(True)
+        self.large_image_label.setScaledContents(False)
         
         layout.addWidget(self.large_image_label)
         
