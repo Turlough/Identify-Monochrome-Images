@@ -185,7 +185,7 @@ class MonochromeDetector(QMainWindow):
         # Container for thumbnails
         thumbnail_container = QFrame()
         thumbnail_container.setFrameStyle(QFrame.Shape.StyledPanel)
-        thumbnail_container.setMaximumWidth(600)
+        thumbnail_container.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         
         layout = QVBoxLayout()
         thumbnail_container.setLayout(layout)
@@ -204,7 +204,7 @@ class MonochromeDetector(QMainWindow):
         self.scroll_area.setWidget(self.thumbnail_grid)
         layout.addWidget(self.scroll_area)
         
-        parent_layout.addWidget(thumbnail_container)
+        parent_layout.addWidget(thumbnail_container, 2)
     
     def setup_image_view_panel(self, parent_layout):
         """Setup right panel for large image view"""
@@ -224,7 +224,7 @@ class MonochromeDetector(QMainWindow):
         
         layout.addWidget(self.large_image_label)
         
-        parent_layout.addWidget(image_container)
+        parent_layout.addWidget(image_container, 1)
     
     def load_file_list(self):
         """Load CSV file with document structure"""
@@ -269,8 +269,8 @@ class MonochromeDetector(QMainWindow):
         # Clear selected images set
         self.selected_images.clear()
         
-        # Create thumbnails in 4 column grid
-        cols = 4
+        # Create thumbnails in 8 column grid
+        cols = 8
         for i, image_path in enumerate(self.image_files):
             row = i // cols
             col = i % cols
@@ -396,7 +396,7 @@ class MonochromeDetector(QMainWindow):
 def main():
     app = QApplication(sys.argv)
     window = MonochromeDetector()
-    window.show()
+    window.showMaximized()
     sys.exit(app.exec())
 
 
