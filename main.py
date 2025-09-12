@@ -7,9 +7,50 @@ from PIL import Image, ImageOps
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QGridLayout, QScrollArea, QLabel, 
                             QCheckBox, QMenuBar, QFileDialog, QMessageBox,
-                            QFrame, QSizePolicy)
+                            QFrame, QSizePolicy, QPushButton)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QPixmap, QAction, QFont
+from color_detector import ColorDetector
+
+
+class ColorAnalysisThread(QThread):
+    """Thread for analyzing images to detect monochrome candidates"""
+    progress = pyqtSignal(str)
+    analysis_complete = pyqtSignal(list)  # List of image paths that are monochrome
+    
+    def __init__(self, image_paths: List[str]):
+        super().__init__()
+        self.image_paths = image_paths
+        self.color_detector = ColorDetector()
+    
+    def run(self):
+        """Analyze all images for monochrome characteristics"""
+        monochrome_candidates = []
+        
+        for i, image_path in enumerate(self.image_paths):
+            try:
+                self.progress.emit(f"Analyzing {os.path.basename(image_path)}...")
+                
+                # Analyze the image
+                result = self.color_detector.analyze_image_color(image_path)
+                
+                if result['is_monochrome'] and result['confidence'] >= 0.4:
+                    monochrome_candidates.append(image_path)
+                    self.progress.emit(f"✓ {os.path.basename(image_path)} - Monochrome candidate (confidence: {result['confidence']:.2f})")
+                else:
+                    # Show debug info for non-monochrome images
+                    debug_result = self.color_detector.debug_analysis(image_path)
+                    if 'debug_info' in debug_result:
+                        criteria_passed = debug_result['debug_info']['criteria_passed']
+                        self.progress.emit(f"  {os.path.basename(image_path)} - Color image (confidence: {result['confidence']:.2f}, criteria: {criteria_passed}/6)")
+                    else:
+                        self.progress.emit(f"  {os.path.basename(image_path)} - Color image (confidence: {result['confidence']:.2f})")
+                    
+            except Exception as e:
+                self.progress.emit(f"Error analyzing {image_path}: {str(e)}")
+        
+        self.progress.emit(f"Analysis complete. Found {len(monochrome_candidates)} monochrome candidates.")
+        self.analysis_complete.emit(monochrome_candidates)
 
 
 class ImageConverter(QThread):
@@ -143,6 +184,7 @@ class MonochromeDetector(QMainWindow):
         self.thumbnail_widgets = []
         self.selected_images = set()
         self.converter_thread = None
+        self.color_analysis_thread = None
         
         self.setWindowTitle("Monochrome Detector")
         self.setGeometry(100, 100, 1200, 800)
@@ -159,6 +201,15 @@ class MonochromeDetector(QMainWindow):
         load_action = QAction('Load List', self)
         load_action.triggered.connect(self.load_file_list)
         file_menu.addAction(load_action)
+        
+        file_menu.addSeparator()
+        
+        # Analyze Colors action
+        analyze_action = QAction('Analyze Colors', self)
+        analyze_action.triggered.connect(self.analyze_colors)
+        analyze_action.setEnabled(False)  # Disabled until images are loaded
+        file_menu.addAction(analyze_action)
+        self.analyze_action = analyze_action  # Store reference for enabling/disabling
         
         # Convert action
         convert_action = QAction('Convert', self)
@@ -255,6 +306,9 @@ class MonochromeDetector(QMainWindow):
                 self.file_path = selected_path  # Store for later updating
                 self.populate_thumbnails()
                 
+                # Enable the analyze action now that we have images
+                self.analyze_action.setEnabled(len(self.image_files) > 0)
+                
                 QMessageBox.information(self, "Success", f"Loaded {len(self.image_files)} JPG files from {len(self.document_data)} documents")
                 
             except Exception as e:
@@ -281,6 +335,10 @@ class MonochromeDetector(QMainWindow):
             
             self.grid_layout.addWidget(thumbnail, row, col)
             self.thumbnail_widgets.append(thumbnail)
+        
+        # Update analyze action state
+        if hasattr(self, 'analyze_action'):
+            self.analyze_action.setEnabled(len(self.image_files) > 0)
     
     def on_thumbnail_clicked(self, image_path):
         """Handle thumbnail click"""
@@ -315,6 +373,61 @@ class MonochromeDetector(QMainWindow):
                 self.large_image_label.setPixmap(scaled_pixmap)
         except Exception as e:
             print(f"Error loading large image {image_path}: {e}")
+    
+    def analyze_colors(self):
+        """Analyze all loaded images to detect monochrome candidates"""
+        if not self.image_files:
+            QMessageBox.information(self, "No Images", "Please load images first")
+            return
+        
+        # Confirm analysis
+        reply = QMessageBox.question(
+            self, 
+            "Analyze Colors", 
+            f"This will analyze {len(self.image_files)} images to detect monochrome candidates.\n"
+            "Continue?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        
+        if reply == QMessageBox.StandardButton.Yes:
+            # Disable the analyze action during analysis
+            self.analyze_action.setEnabled(False)
+            
+            # Start color analysis in separate thread
+            self.color_analysis_thread = ColorAnalysisThread(self.image_files)
+            self.color_analysis_thread.progress.connect(self.show_progress)
+            self.color_analysis_thread.analysis_complete.connect(self.on_analysis_complete)
+            self.color_analysis_thread.start()
+    
+    def on_analysis_complete(self, monochrome_candidates: List[str]):
+        """Handle completion of color analysis"""
+        try:
+            # Re-enable the analyze action
+            self.analyze_action.setEnabled(True)
+            
+            # Reset window title
+            self.setWindowTitle("Monochrome Detector")
+            
+            # Auto-check boxes for monochrome candidates
+            checked_count = 0
+            for widget in self.thumbnail_widgets:
+                if widget.image_path in monochrome_candidates:
+                    widget.checkbox.setChecked(True)
+                    self.selected_images.add(widget.image_path)
+                    checked_count += 1
+            
+            # Show results
+            QMessageBox.information(
+                self, 
+                "Analysis Complete", 
+                f"Found {len(monochrome_candidates)} monochrome candidates out of {len(self.image_files)} images.\n"
+                f"Auto-checked {checked_count} thumbnails for conversion."
+            )
+            
+        except Exception as e:
+            self.analyze_action.setEnabled(True)
+            self.setWindowTitle("Monochrome Detector")
+            QMessageBox.critical(self, "Error", f"Failed to complete analysis: {str(e)}")
     
     def convert_selected(self):
         """Convert selected images to G4 TIFF"""
