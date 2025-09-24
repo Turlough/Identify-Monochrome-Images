@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QPixmap, QAction, QFont
 from color_detector import ColorDetector
+from export_pdf_and_mpt import export_from_import_file
 
 
 class ColorAnalysisThread(QThread):
@@ -272,6 +273,15 @@ class MonochromeDetector(QMainWindow):
         convert_action = QAction('Convert', self)
         convert_action.triggered.connect(self.convert_selected)
         file_menu.addAction(convert_action)
+
+        file_menu.addSeparator()
+
+        # Export action
+        export_action = QAction('Export', self)
+        export_action.triggered.connect(self.export_documents)
+        export_action.setEnabled(False)
+        file_menu.addAction(export_action)
+        self.export_action = export_action
     
     def setup_ui(self):
         """Setup main UI"""
@@ -368,11 +378,39 @@ class MonochromeDetector(QMainWindow):
                 
                 # Enable the analyze action now that we have images
                 self.analyze_action.setEnabled(len(self.image_files) > 0)
+
+                # Enable export now that a list is loaded
+                if hasattr(self, 'export_action'):
+                    self.export_action.setEnabled(True)
                 
                 QMessageBox.information(self, "Success", f"Loaded {len(self.image_files)} JPG files from {len(self.document_data)} documents")
                 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load file: {str(e)}")
+
+    def export_documents(self):
+        """Export multipage TIFF and PDF files based on the loaded import file."""
+        if not hasattr(self, 'file_path') or not self.file_path:
+            QMessageBox.information(self, "No List", "Please load an import list first")
+            return
+
+        reply = QMessageBox.question(
+            self,
+            "Export",
+            "Create multipage TIFF and PDF files per document using the loaded list?",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+        )
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            self.setWindowTitle("Monochrome Detector - Exporting...")
+            num_tiffs, num_pdfs = export_from_import_file(self.file_path)
+            self.setWindowTitle("Monochrome Detector")
+            QMessageBox.information(self, "Export Complete", f"Created {num_tiffs} TIFF(s) and {num_pdfs} PDF(s)")
+        except Exception as e:
+            self.setWindowTitle("Monochrome Detector")
+            QMessageBox.critical(self, "Export Failed", str(e))
     
     def populate_thumbnails(self):
         """Populate thumbnail grid with images"""
