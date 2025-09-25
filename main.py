@@ -178,15 +178,6 @@ class MonochromeDetector(QMainWindow):
             QMessageBox.information(self, "No List", "Please load an import list first")
             return
 
-        reply = QMessageBox.question(
-            self,
-            "Export",
-            "Create multipage TIFF and PDF files per document using the loaded list?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        if reply != QMessageBox.StandardButton.Yes:
-            return
-
         try:
             self.setWindowTitle("Monochrome Detector - Exporting...")
             num_tiffs, num_pdfs = export_from_import_file(self.file_path)
@@ -284,25 +275,15 @@ class MonochromeDetector(QMainWindow):
         if not self.image_files:
             QMessageBox.information(self, "No Images", "Please load images first")
             return
+
+        # Disable the analyze action during analysis
+        self.analyze_action.setEnabled(False)
         
-        # Confirm analysis
-        reply = QMessageBox.question(
-            self, 
-            "Analyze Colors", 
-            f"This will analyze {len(self.image_files)} images to detect monochrome candidates.\n"
-            "Continue?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
-        )
-        
-        if reply == QMessageBox.StandardButton.Yes:
-            # Disable the analyze action during analysis
-            self.analyze_action.setEnabled(False)
-            
-            # Start color analysis in separate thread
-            self.color_analysis_thread = ColorAnalysisThread(self.image_files)
-            self.color_analysis_thread.progress.connect(self.show_progress)
-            self.color_analysis_thread.analysis_complete.connect(self.on_analysis_complete)
-            self.color_analysis_thread.start()
+        # Start color analysis in separate thread
+        self.color_analysis_thread = ColorAnalysisThread(self.image_files)
+        self.color_analysis_thread.progress.connect(self.show_progress)
+        self.color_analysis_thread.analysis_complete.connect(self.on_analysis_complete)
+        self.color_analysis_thread.start()
     
     def on_analysis_complete(self, monochrome_candidates: List[str]):
         """Handle completion of color analysis"""
