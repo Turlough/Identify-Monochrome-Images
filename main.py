@@ -12,7 +12,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QPixmap, QAction, QFont
 from color_detector import ColorDetector
-from export_pdf_and_mpt import export_from_import_file
+from exporter import export_from_import_file
 from thumbnails import ThumbnailWidget
 
 from color_analyser import ColorAnalysisThread
