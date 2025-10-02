@@ -1,9 +1,13 @@
 import csv
 from pathlib import Path
 from typing import List, Tuple
-
+import logging
+import numpy as np
+from PIL import Image
 from .export_pdf import _save_pdf
-from .export_mpt import _save_multipage_tiff
+from .export_mpt_imagemagick import _save_multipage_tiff
+
+logging.basicConfig(level=logging.INFO)
 
 def _read_import_list(import_file: str) -> List[List[str]]:
     """Read the import text/csv file into rows.
@@ -71,13 +75,15 @@ def export_from_import_file(import_file: str) -> Tuple[int, int]:
         try:
             _save_multipage_tiff(tiff_out, images)
             num_tiffs += 1 if tiff_out.exists() else 0
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error saving TIFF: {e}")
             pass
 
         try:
             _save_pdf(pdf_out, images)
             num_pdfs += 1 if pdf_out.exists() else 0
-        except Exception:
+        except Exception as e:
+            logging.error(f"Error saving PDF: {e}")
             pass
 
     return num_tiffs, num_pdfs
