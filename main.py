@@ -11,7 +11,7 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QFrame, QSizePolicy, QPushButton, QListWidget, QListWidgetItem,
                             QProgressDialog)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
-from PyQt6.QtGui import QPixmap, QAction, QFont, QCursor
+from PyQt6.QtGui import QPixmap, QAction, QFont, QCursor, QColor
 from color_detector import ColorDetector
 from exporter import export_from_import_file
 from thumbnails import ThumbnailWidget
@@ -94,8 +94,8 @@ class MonochromeDetector(QMainWindow):
         # Container for document list
         doc_list_container = QFrame()
         doc_list_container.setFrameStyle(QFrame.Shape.StyledPanel)
-        doc_list_container.setMinimumWidth(200)
-        doc_list_container.setMaximumWidth(250)
+        doc_list_container.setMinimumWidth(250)
+        doc_list_container.setMaximumWidth(320)
         
         layout = QVBoxLayout()
         doc_list_container.setLayout(layout)
@@ -239,9 +239,33 @@ class MonochromeDetector(QMainWindow):
         self.document_list_widget.clear()
         for idx, row in enumerate(self.document_data):
             doc_name = row[0] if row else "Unknown"
-            # Format: 4-digit index and document name
-            item_text = f"{idx + 1:04d} {doc_name}"
+            
+            # Count JPG files (color) and total files
+            jpg_count = 0
+            total_count = 0
+            for i in range(1, len(row)):
+                filename = row[i].strip()
+                if filename:  # Skip empty entries
+                    total_count += 1
+                    if filename.lower().endswith('.jpg'):
+                        jpg_count += 1
+            
+            # Calculate percentage of color pages
+            if total_count > 0:
+                color_percentage = round((jpg_count / total_count) * 100)
+                stats_text = f"{jpg_count}/{total_count} ({color_percentage}%) colour"
+            else:
+                stats_text = "0/0 (0%) colour"
+                color_percentage = 0
+            
+            # Format: 4-digit index, document name, and statistics
+            item_text = f"{idx + 1:04d} {doc_name} - {stats_text}"
             item = QListWidgetItem(item_text)
+            
+            # Highlight fully-color documents in red
+            if color_percentage == 100 and total_count > 0:
+                item.setForeground(QColor(Qt.GlobalColor.red))
+            
             self.document_list_widget.addItem(item)
     
     def on_document_list_item_clicked(self, item):
@@ -304,6 +328,8 @@ class MonochromeDetector(QMainWindow):
             # Update source file with new .tif filenames
             if converted_files:
                 self.update_source_file(converted_files)
+                # Refresh document list to show updated statistics
+                self.populate_document_list()
             
             # Now navigate to the pending document
             if self.pending_navigation_index is not None:
@@ -585,6 +611,9 @@ class MonochromeDetector(QMainWindow):
             
             # Update source file with new .tif filenames
             self.update_source_file(converted_files)
+            
+            # Refresh document list to show updated statistics
+            self.populate_document_list()
             
             # Remove converted items from grid
             self.remove_converted_items(converted_files)
