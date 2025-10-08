@@ -8,7 +8,7 @@ from PIL import Image, ImageOps
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QGridLayout, QScrollArea, QLabel, 
                             QCheckBox, QMenuBar, QFileDialog, QMessageBox,
-                            QFrame, QSizePolicy, QPushButton)
+                            QFrame, QSizePolicy, QPushButton, QListWidget, QListWidgetItem)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
 from PyQt6.QtGui import QPixmap, QAction, QFont
 from color_detector import ColorDetector
@@ -77,11 +77,40 @@ class MonochromeDetector(QMainWindow):
         main_layout = QHBoxLayout()
         central_widget.setLayout(main_layout)
         
-        # Left panel - Thumbnail grid
+        # Left panel - Document list
+        self.setup_document_list_panel(main_layout)
+        
+        # Middle panel - Thumbnail grid
         self.setup_thumbnail_panel(main_layout)
         
         # Right panel - Large image view
         self.setup_image_view_panel(main_layout)
+    
+    def setup_document_list_panel(self, parent_layout):
+        """Setup left panel with document list"""
+        # Container for document list
+        doc_list_container = QFrame()
+        doc_list_container.setFrameStyle(QFrame.Shape.StyledPanel)
+        doc_list_container.setMinimumWidth(200)
+        doc_list_container.setMaximumWidth(250)
+        
+        layout = QVBoxLayout()
+        doc_list_container.setLayout(layout)
+        
+        # Label
+        list_label = QLabel("Documents")
+        font = QFont()
+        font.setBold(True)
+        list_label.setFont(font)
+        list_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(list_label)
+        
+        # Document list widget
+        self.document_list_widget = QListWidget()
+        self.document_list_widget.itemClicked.connect(self.on_document_list_item_clicked)
+        layout.addWidget(self.document_list_widget)
+        
+        parent_layout.addWidget(doc_list_container)
     
     def setup_thumbnail_panel(self, parent_layout):
         """Setup left panel with thumbnail grid"""
@@ -179,6 +208,9 @@ class MonochromeDetector(QMainWindow):
                 self.file_path = selected_path  # Store for later updating
                 self.base_dir = base_dir  # Store base directory for resolving paths
                 
+                # Populate document list
+                self.populate_document_list()
+                
                 # Start with first document
                 self.current_document_index = 0
                 self.show_current_document()
@@ -195,6 +227,25 @@ class MonochromeDetector(QMainWindow):
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load file: {str(e)}")
 
+    def populate_document_list(self):
+        """Populate the document list widget"""
+        self.document_list_widget.clear()
+        for idx, row in enumerate(self.document_data):
+            doc_name = row[0] if row else "Unknown"
+            # Format: 4-digit index and document name
+            item_text = f"{idx + 1:04d} {doc_name}"
+            item = QListWidgetItem(item_text)
+            self.document_list_widget.addItem(item)
+    
+    def on_document_list_item_clicked(self, item):
+        """Handle click on document list item"""
+        # Extract the index from the clicked item (first 4 digits)
+        clicked_index = self.document_list_widget.row(item)
+        if clicked_index >= 0 and clicked_index < len(self.document_data):
+            self.current_document_index = clicked_index
+            self.show_current_document()
+            self.update_navigation_buttons()
+    
     def show_current_document(self):
         """Display thumbnails for the current document"""
         if not self.document_data:
@@ -215,6 +266,9 @@ class MonochromeDetector(QMainWindow):
         # Update document info label
         doc_name = current_row[0] if current_row else "Unknown"
         self.doc_info_label.setText(f"Document {self.current_document_index + 1} of {len(self.document_data)}: {doc_name}")
+        
+        # Update selection in document list
+        self.document_list_widget.setCurrentRow(self.current_document_index)
         
         # Populate thumbnails for this document
         self.populate_thumbnails()
