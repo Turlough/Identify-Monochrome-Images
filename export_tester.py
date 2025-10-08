@@ -3,7 +3,7 @@ from pathlib import Path
 from PIL import Image
 import os
 
-import_file = r"C:\_PV\DAHG\EXPORT.TXT"
+import_file = r"C:\_PV\DAHG\EXPORT-small.TXT"
 
 num_tiffs, num_pdfs = export_from_import_file(import_file)
 

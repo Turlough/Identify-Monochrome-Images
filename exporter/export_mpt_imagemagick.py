@@ -59,18 +59,18 @@ def _save_multipage_tiff(output_path: Path, images: List[Path]) -> None:
                         processed_img.compression = 'group4'
                         processed_img.type = 'bilevel'  # Ensure 1-bit
                         processed_img.colorspace = 'gray'
-                        logging.debug(f"Applied G4 compression to {img_path}")
-                        processed_img.resolution = img.resolution
-                        logging.debug(f"Preserved DPI {img.resolution} from {img_path}")
+                        logging.info(f"Applied G4 compression to {img_path}")
+                        processed_img.resolution = 300
+                        logging.info(f"Preserved DPI {processed_img.resolution} from {img_path}")
                         
                     else:
                         # For color images (JPG, other TIFFs), use JPEG compression
                         processed_img.compression = 'jpeg'
-                        processed_img.compression_quality = 85  # Good quality/size balance
+                        processed_img.compression_quality = 20  # Good quality/size balance
                         # Convert to RGB if not already
                         if processed_img.colorspace != 'rgb':
                             processed_img.colorspace = 'rgb'
-                        logging.debug(f"Applied JPEG compression to {img_path}")
+                        logging.info(f"Applied JPEG compression to {img_path}")
                     
                     # Add to list (this creates a copy)
                     converted_images.append(processed_img.clone())

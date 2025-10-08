@@ -189,6 +189,13 @@ class MonochromeDetector(QMainWindow):
     
     def populate_thumbnails(self):
         """Populate thumbnail grid with images"""
+        # Indicate progress in the window title
+        try:
+            total_images = len(self.image_files)
+            if total_images > 0:
+                self.setWindowTitle("Monochrome Detector - Loading thumbnails...")
+        except Exception:
+            pass
         # Clear existing thumbnails
         for widget in self.thumbnail_widgets:
             widget.deleteLater()
@@ -208,6 +215,13 @@ class MonochromeDetector(QMainWindow):
             
             self.grid_layout.addWidget(thumbnail, row, col)
             self.thumbnail_widgets.append(thumbnail)
+            # Update progress in the title bar and keep UI responsive
+            try:
+                if (i + 1) % 5 == 0 or (i + 1) == len(self.image_files):
+                    self.setWindowTitle(f"Monochrome Detector - Loading thumbnails {i + 1}/{len(self.image_files)}")
+                    QApplication.processEvents()
+            except Exception:
+                pass
         
         # Apply responsive sizing to match current panel width
         self.update_thumbnail_cell_sizes()
@@ -215,6 +229,12 @@ class MonochromeDetector(QMainWindow):
         # Update analyze action state
         if hasattr(self, 'analyze_action'):
             self.analyze_action.setEnabled(len(self.image_files) > 0)
+        
+        # Reset title after loading
+        try:
+            self.setWindowTitle("Monochrome Detector")
+        except Exception:
+            pass
 
     def update_thumbnail_cell_sizes(self):
         """Resize thumbnail cells to 15% of the thumbnail panel width (square)."""

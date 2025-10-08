@@ -3,6 +3,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 from PyQt6.QtCore import QThread, pyqtSignal
 from PIL import Image, ImageOps
+import cv2
+import numpy as np
 
 
 
@@ -31,15 +33,33 @@ class ImageConverter(QThread):
                     # Convert to grayscale
                     gray_img = ImageOps.grayscale(img)
                     
-                    # Convert to 1-bit (bilevel) using a fixed threshold so Group 4 is valid
-                    # Group 4 requires 1-bit images (BitsPerSample == 1)
-                    bw_img = gray_img.point(lambda x: 255 if x >= 128 else 0, mode='1')
+                    # Convert PIL image to numpy array for OpenCV processing
+                    gray_array = np.array(gray_img)
+                    
+                    # Apply adaptive thresholding
+                    # ADAPTIVE_THRESH_GAUSSIAN_C uses Gaussian-weighted sum of neighborhood values
+                    # THRESH_BINARY: pixel becomes 255 if greater than threshold, 0 otherwise
+                    # Block size: 11 (size of neighborhood area)
+                    # C: constant subtracted from mean (helps fine-tune threshold)
+                    adaptive_thresh = cv2.adaptiveThreshold(
+                        gray_array, 
+                        255, 
+                        cv2.ADAPTIVE_THRESH_GAUSSIAN_C, 
+                        cv2.THRESH_BINARY, 
+                        11, 
+                        15
+                    )
+                    
+                    # Convert back to PIL Image
+                    bw_img = Image.fromarray(adaptive_thresh, mode='L').convert('1')
                     
                     # Create output path with .tif extension
                     output_path = os.path.splitext(image_path)[0] + '.tif'
                     
                     # Save as G4 TIFF
-                    bw_img.save(output_path, 'TIFF', compression='group4')
+                    # Save with original DPI if available, default to 300 DPI if not
+                    dpi = img.info.get('dpi', (300, 300))
+                    bw_img.save(output_path, 'TIFF', compression='group4', dpi=dpi)
                     
                     # Verify output file was created
                     if os.path.exists(output_path):
