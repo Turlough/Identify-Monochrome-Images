@@ -240,15 +240,18 @@ class MonochromeDetector(QMainWindow):
         for idx, row in enumerate(self.document_data):
             doc_name = row[0] if row else "Unknown"
             
-            # Count JPG files (color) and total files
+            # Count JPG files (color) and total files (starting from index 2, first two are metadata)
             jpg_count = 0
             total_count = 0
-            for i in range(1, len(row)):
+            for i in range(2, len(row)):
                 filename = row[i].strip()
                 if filename:  # Skip empty entries
-                    total_count += 1
+                    # Only count .jpg and .tif files
                     if filename.lower().endswith('.jpg'):
                         jpg_count += 1
+                        total_count += 1
+                    elif filename.lower().endswith('.tif'):
+                        total_count += 1
             
             # Calculate percentage of color pages
             if total_count > 0:
@@ -354,8 +357,8 @@ class MonochromeDetector(QMainWindow):
         self.image_files = []
         current_row = self.document_data[self.current_document_index]
         
-        # Extract JPG files from current document row
-        for i in range(1, len(current_row)):
+        # Extract JPG files from current document row (starting from index 2, first two are metadata)
+        for i in range(2, len(current_row)):
             image_name = current_row[i].strip()
             if image_name.lower().endswith('.jpg'):
                 # Resolve relative paths against the source file's directory
@@ -634,9 +637,9 @@ class MonochromeDetector(QMainWindow):
             new_filename = os.path.basename(new_path)
             filename_mapping[old_filename] = new_filename
         
-        # Update document data
+        # Update document data (starting from index 2, first two are metadata)
         for row in self.document_data:
-            for i in range(1, len(row)):
+            for i in range(2, len(row)):
                 filename = row[i].strip()
                 if filename in filename_mapping:
                     row[i] = filename_mapping[filename]
