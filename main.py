@@ -27,6 +27,7 @@ class MonochromeDetector(QMainWindow):
         self.selected_images = set()
         self.converter_thread = None
         self.color_analysis_thread = None
+        self.current_document_index = 0
         
         self.setWindowTitle("Monochrome Detector")
         self.setGeometry(100, 100, 1200, 800)
@@ -92,6 +93,33 @@ class MonochromeDetector(QMainWindow):
         layout = QVBoxLayout()
         thumbnail_container.setLayout(layout)
         
+        # Navigation bar
+        nav_layout = QHBoxLayout()
+        
+        # Previous button
+        self.prev_button = QPushButton("◀ Previous")
+        self.prev_button.setMinimumHeight(40)
+        self.prev_button.clicked.connect(self.show_previous_document)
+        self.prev_button.setEnabled(False)
+        nav_layout.addWidget(self.prev_button)
+        
+        # Next button
+        self.next_button = QPushButton("Next ▶")
+        self.next_button.setMinimumHeight(40)
+        self.next_button.clicked.connect(self.show_next_document)
+        self.next_button.setEnabled(False)
+        nav_layout.addWidget(self.next_button)
+        
+        # Document info label
+        self.doc_info_label = QLabel("No document loaded")
+        self.doc_info_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        font = QFont()
+        font.setBold(True)
+        self.doc_info_label.setFont(font)
+        nav_layout.addWidget(self.doc_info_label, 1)
+        
+        layout.addLayout(nav_layout)
+        
         # Scroll area for thumbnails
         self.scroll_area = QScrollArea()
         self.scroll_area.setWidgetResizable(True)
@@ -140,7 +168,6 @@ class MonochromeDetector(QMainWindow):
         if selected_path:
             try:
                 self.document_data = []
-                self.image_files = []
                 base_dir = os.path.dirname(selected_path)
                 
                 with open(selected_path, 'r', encoding='utf-8') as file:
@@ -148,29 +175,77 @@ class MonochromeDetector(QMainWindow):
                     for row in reader:
                         if len(row) > 1:  # Skip empty rows
                             self.document_data.append(row)
-                            
-                            # Extract JPG files (skip .tif files as per requirements)
-                            for i in range(1, len(row)):
-                                image_name = row[i].strip()
-                                if image_name.lower().endswith('.jpg'):
-                                    # Resolve relative paths against the source file's directory
-                                    image_path = image_name if os.path.isabs(image_name) else os.path.join(base_dir, image_name)
-                                    self.image_files.append(image_path)
                 
                 self.file_path = selected_path  # Store for later updating
-                self.populate_thumbnails()
+                self.base_dir = base_dir  # Store base directory for resolving paths
                 
-                # Enable the analyze action now that we have images
-                self.analyze_action.setEnabled(len(self.image_files) > 0)
+                # Start with first document
+                self.current_document_index = 0
+                self.show_current_document()
+                
+                # Update navigation buttons
+                self.update_navigation_buttons()
 
                 # Enable export now that a list is loaded
                 if hasattr(self, 'export_action'):
                     self.export_action.setEnabled(True)
                 
-                QMessageBox.information(self, "Success", f"Loaded {len(self.image_files)} JPG files from {len(self.document_data)} documents")
+                QMessageBox.information(self, "Success", f"Loaded {len(self.document_data)} documents")
                 
             except Exception as e:
                 QMessageBox.critical(self, "Error", f"Failed to load file: {str(e)}")
+
+    def show_current_document(self):
+        """Display thumbnails for the current document"""
+        if not self.document_data:
+            return
+        
+        # Get images for current document
+        self.image_files = []
+        current_row = self.document_data[self.current_document_index]
+        
+        # Extract JPG files from current document row
+        for i in range(1, len(current_row)):
+            image_name = current_row[i].strip()
+            if image_name.lower().endswith('.jpg'):
+                # Resolve relative paths against the source file's directory
+                image_path = image_name if os.path.isabs(image_name) else os.path.join(self.base_dir, image_name)
+                self.image_files.append(image_path)
+        
+        # Update document info label
+        doc_name = current_row[0] if current_row else "Unknown"
+        self.doc_info_label.setText(f"Document {self.current_document_index + 1} of {len(self.document_data)}: {doc_name}")
+        
+        # Populate thumbnails for this document
+        self.populate_thumbnails()
+        
+        # Enable the analyze action if we have images
+        if hasattr(self, 'analyze_action'):
+            self.analyze_action.setEnabled(len(self.image_files) > 0)
+    
+    def show_previous_document(self):
+        """Navigate to previous document"""
+        if self.current_document_index > 0:
+            self.current_document_index -= 1
+            self.show_current_document()
+            self.update_navigation_buttons()
+    
+    def show_next_document(self):
+        """Navigate to next document"""
+        if self.current_document_index < len(self.document_data) - 1:
+            self.current_document_index += 1
+            self.show_current_document()
+            self.update_navigation_buttons()
+    
+    def update_navigation_buttons(self):
+        """Update the enabled state of navigation buttons"""
+        if not self.document_data:
+            self.prev_button.setEnabled(False)
+            self.next_button.setEnabled(False)
+            return
+        
+        self.prev_button.setEnabled(self.current_document_index > 0)
+        self.next_button.setEnabled(self.current_document_index < len(self.document_data) - 1)
 
     def export_documents(self):
         """Export multipage TIFF and PDF files based on the loaded import file."""
@@ -403,13 +478,9 @@ class MonochromeDetector(QMainWindow):
     
     def remove_converted_items(self, converted_files):
         """Remove converted items from thumbnail grid"""
-        converted_paths = {old_path for old_path, _ in converted_files}
-        
-        # Remove from image_files list
-        self.image_files = [path for path in self.image_files if path not in converted_paths]
-        
-        # Repopulate thumbnails
-        self.populate_thumbnails()
+        # Refresh the current document view to show updated filenames
+        self.show_current_document()
+        self.update_navigation_buttons()
 
 
 def main():
