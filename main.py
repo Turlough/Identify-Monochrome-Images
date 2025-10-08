@@ -8,9 +8,10 @@ from PIL import Image, ImageOps
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QGridLayout, QScrollArea, QLabel, 
                             QCheckBox, QMenuBar, QFileDialog, QMessageBox,
-                            QFrame, QSizePolicy, QPushButton, QListWidget, QListWidgetItem)
+                            QFrame, QSizePolicy, QPushButton, QListWidget, QListWidgetItem,
+                            QProgressDialog)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
-from PyQt6.QtGui import QPixmap, QAction, QFont
+from PyQt6.QtGui import QPixmap, QAction, QFont, QCursor
 from color_detector import ColorDetector
 from exporter import export_from_import_file
 from thumbnails import ThumbnailWidget
@@ -28,6 +29,8 @@ class MonochromeDetector(QMainWindow):
         self.converter_thread = None
         self.color_analysis_thread = None
         self.current_document_index = 0
+        self.pending_navigation_index = None
+        self.is_converting = False
         
         self.setWindowTitle("Monochrome Detector")
         self.setGeometry(100, 100, 1200, 800)
@@ -196,6 +199,8 @@ class MonochromeDetector(QMainWindow):
         
         if selected_path:
             try:
+                self.show_busy_cursor(True)
+                
                 self.document_data = []
                 base_dir = os.path.dirname(selected_path)
                 
@@ -222,9 +227,11 @@ class MonochromeDetector(QMainWindow):
                 if hasattr(self, 'export_action'):
                     self.export_action.setEnabled(True)
                 
+                self.show_busy_cursor(False)
                 QMessageBox.information(self, "Success", f"Loaded {len(self.document_data)} documents")
                 
             except Exception as e:
+                self.show_busy_cursor(False)
                 QMessageBox.critical(self, "Error", f"Failed to load file: {str(e)}")
 
     def populate_document_list(self):
@@ -242,9 +249,75 @@ class MonochromeDetector(QMainWindow):
         # Extract the index from the clicked item (first 4 digits)
         clicked_index = self.document_list_widget.row(item)
         if clicked_index >= 0 and clicked_index < len(self.document_data):
-            self.current_document_index = clicked_index
+            # Navigate to the selected document (with auto-conversion)
+            self.navigate_to_document(clicked_index)
+    
+    def navigate_to_document(self, target_index):
+        """Navigate to a document, converting selected images first if needed"""
+        if target_index == self.current_document_index:
+            return
+        
+        # Check if there are selected images to convert
+        selected_paths = self.get_selected_images()
+        
+        if selected_paths and not self.is_converting:
+            # Store the target index for after conversion
+            self.pending_navigation_index = target_index
+            # Convert selected images (will show busy cursor)
+            self.convert_selected_for_navigation()
+        else:
+            # No conversion needed, navigate directly
+            self.show_busy_cursor(True)
+            self.current_document_index = target_index
             self.show_current_document()
             self.update_navigation_buttons()
+            self.show_busy_cursor(False)
+    
+    def get_selected_images(self):
+        """Get list of currently selected image paths"""
+        selected_paths = []
+        for widget in self.thumbnail_widgets:
+            if widget.is_checked():
+                selected_paths.append(widget.image_path)
+        return selected_paths
+    
+    def convert_selected_for_navigation(self):
+        """Convert selected images before navigation"""
+        selected_paths = self.get_selected_images()
+        if not selected_paths:
+            return
+        
+        self.is_converting = True
+        self.show_busy_cursor(True)
+        
+        # Start conversion in separate thread
+        self.converter_thread = ImageConverter(selected_paths)
+        self.converter_thread.progress.connect(self.show_progress)
+        self.converter_thread.finished.connect(self.on_navigation_conversion_finished)
+        self.converter_thread.start()
+    
+    def on_navigation_conversion_finished(self, converted_files):
+        """Handle conversion completion when triggered by navigation"""
+        try:
+            self.is_converting = False
+            
+            # Update source file with new .tif filenames
+            if converted_files:
+                self.update_source_file(converted_files)
+            
+            # Now navigate to the pending document
+            if self.pending_navigation_index is not None:
+                self.current_document_index = self.pending_navigation_index
+                self.pending_navigation_index = None
+                self.show_current_document()
+                self.update_navigation_buttons()
+            
+            self.show_busy_cursor(False)
+            
+        except Exception as e:
+            self.is_converting = False
+            self.show_busy_cursor(False)
+            QMessageBox.critical(self, "Error", f"Failed to convert images: {str(e)}")
     
     def show_current_document(self):
         """Display thumbnails for the current document"""
@@ -280,16 +353,12 @@ class MonochromeDetector(QMainWindow):
     def show_previous_document(self):
         """Navigate to previous document"""
         if self.current_document_index > 0:
-            self.current_document_index -= 1
-            self.show_current_document()
-            self.update_navigation_buttons()
+            self.navigate_to_document(self.current_document_index - 1)
     
     def show_next_document(self):
         """Navigate to next document"""
         if self.current_document_index < len(self.document_data) - 1:
-            self.current_document_index += 1
-            self.show_current_document()
-            self.update_navigation_buttons()
+            self.navigate_to_document(self.current_document_index + 1)
     
     def update_navigation_buttons(self):
         """Update the enabled state of navigation buttons"""
@@ -300,6 +369,13 @@ class MonochromeDetector(QMainWindow):
         
         self.prev_button.setEnabled(self.current_document_index > 0)
         self.next_button.setEnabled(self.current_document_index < len(self.document_data) - 1)
+    
+    def show_busy_cursor(self, show=True):
+        """Show or hide busy cursor"""
+        if show:
+            QApplication.setOverrideCursor(QCursor(Qt.CursorShape.WaitCursor))
+        else:
+            QApplication.restoreOverrideCursor()
 
     def export_documents(self):
         """Export multipage TIFF and PDF files based on the loaded import file."""
@@ -308,11 +384,14 @@ class MonochromeDetector(QMainWindow):
             return
 
         try:
+            self.show_busy_cursor(True)
             self.setWindowTitle("Monochrome Detector - Exporting...")
             num_tiffs, num_pdfs = export_from_import_file(self.file_path)
+            self.show_busy_cursor(False)
             self.setWindowTitle("Monochrome Detector")
             QMessageBox.information(self, "Export Complete", f"Created {num_tiffs} TIFF(s) and {num_pdfs} PDF(s)")
         except Exception as e:
+            self.show_busy_cursor(False)
             self.setWindowTitle("Monochrome Detector")
             QMessageBox.critical(self, "Export Failed", str(e))
     
@@ -427,6 +506,7 @@ class MonochromeDetector(QMainWindow):
 
         # Disable the analyze action during analysis
         self.analyze_action.setEnabled(False)
+        self.show_busy_cursor(True)
         
         # Start color analysis in separate thread
         self.color_analysis_thread = ColorAnalysisThread(self.image_files)
@@ -439,6 +519,7 @@ class MonochromeDetector(QMainWindow):
         try:
             # Re-enable the analyze action
             self.analyze_action.setEnabled(True)
+            self.show_busy_cursor(False)
             
             # Reset window title
             self.setWindowTitle("Monochrome Detector")
@@ -461,6 +542,7 @@ class MonochromeDetector(QMainWindow):
             
         except Exception as e:
             self.analyze_action.setEnabled(True)
+            self.show_busy_cursor(False)
             self.setWindowTitle("Monochrome Detector")
             QMessageBox.critical(self, "Error", f"Failed to complete analysis: {str(e)}")
     
@@ -479,6 +561,8 @@ class MonochromeDetector(QMainWindow):
             QMessageBox.information(self, "No Selection", "Please select images to convert")
             return
         
+        self.show_busy_cursor(True)
+        
         # Start conversion in separate thread
         self.converter_thread = ImageConverter(selected_paths)
         self.converter_thread.progress.connect(self.show_progress)
@@ -494,6 +578,8 @@ class MonochromeDetector(QMainWindow):
     def on_conversion_finished(self, converted_files):
         """Handle conversion completion"""
         try:
+            self.show_busy_cursor(False)
+            
             # Reset window title
             self.setWindowTitle("Monochrome Detector")
             
@@ -506,6 +592,7 @@ class MonochromeDetector(QMainWindow):
             QMessageBox.information(self, "Success", f"Converted {len(converted_files)} images to G4 TIFF")
             
         except Exception as e:
+            self.show_busy_cursor(False)
             self.setWindowTitle("Monochrome Detector")
             QMessageBox.critical(self, "Error", f"Failed to update files: {str(e)}")
     
