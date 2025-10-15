@@ -18,6 +18,7 @@ from thumbnails import ThumbnailWidget
 
 from color_analyser import ColorAnalysisThread
 from image_converter import ImageConverter
+from dotenv import load_dotenv
 
 class MonochromeDetector(QMainWindow):
     def __init__(self):
@@ -193,8 +194,13 @@ class MonochromeDetector(QMainWindow):
     
     def load_file_list(self):
         """Load CSV file with document structure"""
+        load_dotenv()
+        default_folder = os.getenv('DEFAULT_PICKER_FOLDER')
         selected_path, _ = QFileDialog.getOpenFileName(
-            self, "Load Document List", "", "Text Files (*.txt *.csv);;All Files (*)"
+            self, 
+            "Load Document List", 
+            default_folder,
+            "Text Files (*.txt *.csv);;All Files (*)"
         )
         
         if selected_path:
