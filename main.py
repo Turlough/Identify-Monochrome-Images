@@ -19,6 +19,7 @@ from thumbnails import ThumbnailWidget
 from color_analyser import ColorAnalysisThread
 from image_converter import ImageConverter
 from dotenv import load_dotenv
+from thumbnail_loader import ThumbnailLoader
 
 class MonochromeDetector(QMainWindow):
     def __init__(self):
@@ -38,6 +39,13 @@ class MonochromeDetector(QMainWindow):
         
         self.setup_menu()
         self.setup_ui()
+        
+        # Async thumbnail loader and mapping
+        max_threads = max(2, (os.cpu_count() or 4) // 2)
+        self.thumbnail_loader = ThumbnailLoader(max_threads=max_threads)
+        self.thumbnail_loader.thumbnailReady.connect(self._on_thumb_ready)
+        self.thumbnail_loader.thumbnailFailed.connect(self._on_thumb_failed)
+        self._path_to_widget: Dict[str, ThumbnailWidget] = {}
     
     def setup_menu(self):
         """Setup menu bar"""
@@ -445,6 +453,8 @@ class MonochromeDetector(QMainWindow):
         self.thumbnail_widgets.clear()
         # Clear selected images set
         self.selected_images.clear()
+        # Clear mapping for old widgets
+        self._path_to_widget.clear()
         
         # Create thumbnails in 6 column grid
         cols = 6
@@ -458,6 +468,13 @@ class MonochromeDetector(QMainWindow):
             
             self.grid_layout.addWidget(thumbnail, row, col)
             self.thumbnail_widgets.append(thumbnail)
+            self._path_to_widget[image_path] = thumbnail
+            
+            # Queue async thumbnail load sized to the image area
+            cell = thumbnail._cell_size
+            target = QSize(max(10, cell - 4), max(10, cell - 24))
+            self.thumbnail_loader.request(image_path, target)
+            
             # Update progress in the title bar and keep UI responsive
             try:
                 if (i + 1) % 5 == 0 or (i + 1) == len(self.image_files):
@@ -478,6 +495,15 @@ class MonochromeDetector(QMainWindow):
             self.setWindowTitle("Monochrome Detector")
         except Exception:
             pass
+
+    def _on_thumb_ready(self, path: str, image):
+        widget = self._path_to_widget.get(path)
+        if widget is not None:
+            widget.set_thumbnail(image)
+
+    def _on_thumb_failed(self, path: str, message: str):
+        # For now, we silently ignore or could set a placeholder
+        print(f"Failed to load thumbnail for {os.path.basename(path)}: {message}")
 
     def update_thumbnail_cell_sizes(self):
         """Resize thumbnail cells to 15% of the thumbnail panel width (square)."""
@@ -671,4 +697,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 

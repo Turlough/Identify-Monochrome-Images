@@ -1,6 +1,6 @@
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFrame, QCheckBox, QLabel
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
-from PyQt6.QtGui import QPixmap, QFont
+from PyQt6.QtGui import QPixmap, QFont, QImage
 
 
 class ThumbnailWidget(QWidget):
@@ -15,7 +15,7 @@ class ThumbnailWidget(QWidget):
         self._cell_size = 140
         self.setFixedSize(self._cell_size, self._cell_size)
         self.setup_ui()
-        self.load_thumbnail()
+        # Do not load image synchronously here; it will be provided asynchronously
     
     def setup_ui(self):
         layout = QVBoxLayout()
@@ -58,13 +58,12 @@ class ThumbnailWidget(QWidget):
         
         self.setLayout(layout)
     
-    def load_thumbnail(self):
-        """Load and display thumbnail image"""
+    def set_thumbnail(self, image: QImage):
+        """Receive a decoded image from a worker and display it."""
         try:
-            pixmap = QPixmap(self.image_path)
+            target_size = QSize(self.image_label.width(), self.image_label.height())
+            pixmap = QPixmap.fromImage(image)
             if not pixmap.isNull():
-                # Scale to fit current image label size
-                target_size = QSize(self.image_label.width(), self.image_label.height())
                 scaled_pixmap = pixmap.scaled(
                     target_size,
                     Qt.AspectRatioMode.KeepAspectRatio,
@@ -72,7 +71,7 @@ class ThumbnailWidget(QWidget):
                 )
                 self.image_label.setPixmap(scaled_pixmap)
         except Exception as e:
-            print(f"Error loading thumbnail {self.image_path}: {e}")
+            print(f"Error setting thumbnail {self.image_path}: {e}")
 
     def set_cell_size(self, cell_size: int):
         """Set the outer square cell size and update layout accordingly."""
@@ -88,8 +87,17 @@ class ThumbnailWidget(QWidget):
         image_area_height = max(10, self._cell_size - 24)
         self.image_label.setGeometry(2, 2, self._cell_size - 4, image_area_height)
         self.filename_label.setGeometry(2, self._cell_size - 20, self._cell_size - 4, 18)
-        # Rescale pixmap
-        self.load_thumbnail()
+        # Rescale existing pixmap if present
+        current = self.image_label.pixmap()
+        if current is not None and not current.isNull():
+            target_size = QSize(self.image_label.width(), self.image_label.height())
+            self.image_label.setPixmap(
+                current.scaled(
+                    target_size,
+                    Qt.AspectRatioMode.KeepAspectRatio,
+                    Qt.TransformationMode.SmoothTransformation
+                )
+            )
     
     def on_image_clicked(self, event):
         """Handle image click"""
