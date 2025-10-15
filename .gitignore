@@ -1,6 +1,7 @@
 .idea/
 venv/
 DAHG - Shortcut.lnk
+.env
 __pycache__/
 *.pyc
 *.pyo
