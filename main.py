@@ -328,6 +328,17 @@ class MonochromeDetector(QMainWindow):
         if not selected_paths:
             return
         
+        # Check if any selected image is the first JPG in the current document
+        first_jpg_path = self.get_first_jpg_in_current_document()
+        if first_jpg_path and first_jpg_path in selected_paths:
+            QMessageBox.warning(
+                self,
+                "Cannot Convert First Page",
+                "The first JPG in each document cannot be selected for conversion.\n\n"
+                "Rationale: The multipage TIFF will be entirely G4 if the first page is G4."
+            )
+            return
+        
         self.is_converting = True
         self.show_busy_cursor(True)
         
@@ -362,6 +373,23 @@ class MonochromeDetector(QMainWindow):
             self.show_busy_cursor(False)
             QMessageBox.critical(self, "Error", f"Failed to convert images: {str(e)}")
     
+    def get_first_jpg_in_current_document(self):
+        """Get the path to the first JPG file in the current document"""
+        if not self.document_data or self.current_document_index >= len(self.document_data):
+            return None
+        
+        current_row = self.document_data[self.current_document_index]
+        
+        # Find the first JPG file (starting from index 2, first two are metadata)
+        for i in range(2, len(current_row)):
+            image_name = current_row[i].strip()
+            if image_name.lower().endswith('.jpg'):
+                # Resolve relative paths against the source file's directory
+                image_path = image_name if os.path.isabs(image_name) else os.path.join(self.base_dir, image_name)
+                return image_path
+        
+        return None
+
     def show_current_document(self):
         """Display thumbnails for the current document"""
         if not self.document_data:
@@ -456,6 +484,9 @@ class MonochromeDetector(QMainWindow):
         # Clear mapping for old widgets
         self._path_to_widget.clear()
         
+        # Get the first JPG in current document for validation
+        first_jpg_path = self.get_first_jpg_in_current_document()
+        
         # Create thumbnails in 6 column grid
         cols = 6
         for i, image_path in enumerate(self.image_files):
@@ -463,7 +494,9 @@ class MonochromeDetector(QMainWindow):
             col = i % cols
             
             filename = os.path.basename(image_path)
-            thumbnail = ThumbnailWidget(image_path, filename)
+            # Check if this is the first JPG in the document
+            is_first_jpg = (image_path == first_jpg_path)
+            thumbnail = ThumbnailWidget(image_path, filename, is_first_jpg)
             thumbnail.clicked.connect(self.on_thumbnail_clicked)
             
             self.grid_layout.addWidget(thumbnail, row, col)
@@ -620,6 +653,17 @@ class MonochromeDetector(QMainWindow):
         
         if not selected_paths:
             QMessageBox.information(self, "No Selection", "Please select images to convert")
+            return
+        
+        # Check if any selected image is the first JPG in the current document
+        first_jpg_path = self.get_first_jpg_in_current_document()
+        if first_jpg_path and first_jpg_path in selected_paths:
+            QMessageBox.warning(
+                self,
+                "Cannot Convert First Page",
+                "The first JPG in each document cannot be selected for conversion.\n\n"
+                "Rationale: The multipage TIFF will be entirely G4 if the first page is G4."
+            )
             return
         
         self.show_busy_cursor(True)

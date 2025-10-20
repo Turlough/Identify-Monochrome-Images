@@ -1,4 +1,4 @@
-from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFrame, QCheckBox, QLabel
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QFrame, QCheckBox, QLabel, QMessageBox
 from PyQt6.QtCore import Qt, pyqtSignal, QSize
 from PyQt6.QtGui import QPixmap, QFont, QImage
 
@@ -7,10 +7,11 @@ class ThumbnailWidget(QWidget):
     """Widget for displaying a single thumbnail with checkbox"""
     clicked = pyqtSignal(str)
     
-    def __init__(self, image_path: str, filename: str):
+    def __init__(self, image_path: str, filename: str, is_first_jpg: bool = False):
         super().__init__()
         self.image_path = image_path
         self.filename = filename
+        self.is_first_jpg = is_first_jpg
         # Default; will be overridden dynamically
         self._cell_size = 140
         self.setFixedSize(self._cell_size, self._cell_size)
@@ -101,11 +102,32 @@ class ThumbnailWidget(QWidget):
     
     def on_image_clicked(self, event):
         """Handle image click"""
+        if self.is_first_jpg and not self.checkbox.isChecked():
+            # Show message box to prevent selection of first JPG
+            QMessageBox.warning(
+                self,
+                "Cannot Select First Page",
+                "The first JPG in each document cannot be selected for conversion.\n\n"
+                "Rationale: The multipage TIFF will be entirely G4 if the first page is G4."
+            )
+            return
+        
         self.checkbox.setChecked(not self.checkbox.isChecked())
         self.clicked.emit(self.image_path)
     
     def on_checkbox_changed(self, state):
         """Handle checkbox state change"""
+        if self.is_first_jpg and self.checkbox.isChecked():
+            # Show message box and uncheck if user tries to check first JPG
+            QMessageBox.warning(
+                self,
+                "Cannot Select First Page",
+                "The first JPG in each document cannot be selected for conversion.\n\n"
+                "Rationale: The multipage TIFF will be entirely G4 if the first page is G4."
+            )
+            self.checkbox.setChecked(False)
+            return
+        
         self.clicked.emit(self.image_path)
     
     def is_checked(self):
