@@ -252,7 +252,8 @@ class MonochromeDetector(QMainWindow):
         """Populate the document list widget"""
         self.document_list_widget.clear()
         for idx, row in enumerate(self.document_data):
-            doc_name = row[0] if row else "Unknown"
+            # Use second column as document display name
+            doc_name = row[1] if len(row) > 1 else (row[0] if row else "Unknown")
             
             # Count JPG files (color) and total files (starting from index 2, first two are metadata)
             jpg_count = 0
@@ -407,8 +408,8 @@ class MonochromeDetector(QMainWindow):
                 image_path = image_name if os.path.isabs(image_name) else os.path.join(self.base_dir, image_name)
                 self.image_files.append(image_path)
         
-        # Update document info label
-        doc_name = current_row[0] if current_row else "Unknown"
+        # Update document info label using second column as display name
+        doc_name = current_row[1] if len(current_row) > 1 else (current_row[0] if current_row else "Unknown")
         self.doc_info_label.setText(f"Document {self.current_document_index + 1} of {len(self.document_data)}: {doc_name}")
         
         # Update selection in document list
