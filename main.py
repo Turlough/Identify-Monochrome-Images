@@ -1,6 +1,8 @@
 import sys
 import os
 import csv
+import time
+import logging
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Dict, Tuple
@@ -9,17 +11,147 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QHBoxLayout, QGridLayout, QScrollArea, QLabel, 
                             QCheckBox, QMenuBar, QFileDialog, QMessageBox,
                             QFrame, QSizePolicy, QPushButton, QListWidget, QListWidgetItem,
-                            QProgressDialog)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize
+                            QProgressDialog, QDialog, QProgressBar)
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer
 from PyQt6.QtGui import QPixmap, QAction, QFont, QCursor, QColor
 from color_detector import ColorDetector
-from exporter import export_from_import_file
+from exporter import export_from_import_file, export_from_import_file_concurrent
 from thumbnails import ThumbnailWidget
 
 from color_analyser import ColorAnalysisThread
 from image_converter import ImageConverter, convert_image_to_g4_tiff
 from dotenv import load_dotenv
 from thumbnail_loader import ThumbnailLoader
+
+
+class ExportProgressDialog(QDialog):
+    """Progress dialog for concurrent export with time estimates."""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setWindowTitle("Exporting Documents...")
+        self.setModal(True)
+        self.setFixedSize(400, 200)
+        
+        # Time tracking
+        self.start_time = time.time()
+        self.last_update_time = self.start_time
+        
+        self.setup_ui()
+        
+    def setup_ui(self):
+        layout = QVBoxLayout()
+        self.setLayout(layout)
+        
+        # Progress bar
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setRange(0, 100)
+        layout.addWidget(self.progress_bar)
+        
+        # Status label
+        self.status_label = QLabel("Preparing export...")
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.status_label)
+        
+        # Time estimates
+        self.time_label = QLabel("")
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        layout.addWidget(self.time_label)
+        
+        # Current document label
+        self.current_doc_label = QLabel("")
+        self.current_doc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.current_doc_label.setWordWrap(True)
+        layout.addWidget(self.current_doc_label)
+        
+        # Cancel button
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.clicked.connect(self.reject)
+        layout.addWidget(self.cancel_button)
+        
+    def update_progress(self, completed, total, doc_name, tiff_success, pdf_success):
+        """Update progress with time estimates."""
+        current_time = time.time()
+        elapsed = current_time - self.start_time
+        
+        # Update progress bar
+        progress = int((completed / total) * 100) if total > 0 else 0
+        self.progress_bar.setValue(progress)
+        
+        # Update status
+        self.status_label.setText(f"Exported {completed} of {total} documents")
+        
+        # Update current document
+        status_icons = []
+        if tiff_success:
+            status_icons.append("✓ TIFF")
+        if pdf_success:
+            status_icons.append("✓ PDF")
+        
+        status_text = f"Completed: {doc_name}"
+        if status_icons:
+            status_text += f" ({', '.join(status_icons)})"
+        
+        self.current_doc_label.setText(status_text)
+        
+        # Calculate time estimates
+        if completed > 0:
+            avg_time_per_doc = elapsed / completed
+            remaining_docs = total - completed
+            estimated_remaining = avg_time_per_doc * remaining_docs
+            estimated_total = elapsed + estimated_remaining
+            
+            # Format time strings
+            elapsed_str = self._format_time(elapsed)
+            remaining_str = self._format_time(estimated_remaining)
+            total_str = self._format_time(estimated_total)
+            
+            self.time_label.setText(f"Elapsed: {elapsed_str} | Remaining: {remaining_str} | Total: {total_str}")
+        
+        # Force UI update
+        QApplication.processEvents()
+        
+    def _format_time(self, seconds):
+        """Format time in MM:SS or HH:MM:SS format."""
+        if seconds < 60:
+            return f"{int(seconds)}s"
+        elif seconds < 3600:
+            minutes = int(seconds // 60)
+            secs = int(seconds % 60)
+            return f"{minutes:02d}:{secs:02d}"
+        else:
+            hours = int(seconds // 3600)
+            minutes = int((seconds % 3600) // 60)
+            secs = int(seconds % 60)
+            return f"{hours:02d}:{minutes:02d}:{secs:02d}"
+
+
+class ExportThread(QThread):
+    """Thread for concurrent export processing."""
+    
+    progress = pyqtSignal(int, int, str, bool, bool)  # completed, total, doc_name, tiff_success, pdf_success
+    finished = pyqtSignal(int, int)  # num_tiffs, num_pdfs
+    
+    def __init__(self, import_file):
+        super().__init__()
+        self.import_file = import_file
+        
+    def run(self):
+        """Run the concurrent export."""
+        try:
+            num_tiffs, num_pdfs = export_from_import_file_concurrent(
+                self.import_file, 
+                self.progress_callback
+            )
+            self.finished.emit(num_tiffs, num_pdfs)
+        except Exception as e:
+            logging.error(f"Export failed: {e}")
+            self.finished.emit(0, 0)
+    
+    def progress_callback(self, completed, total, doc_name, tiff_success, pdf_success):
+        """Callback for progress updates."""
+        self.progress.emit(completed, total, doc_name, tiff_success, pdf_success)
+
 
 class MonochromeDetector(QMainWindow):
     def __init__(self):
@@ -30,6 +162,8 @@ class MonochromeDetector(QMainWindow):
         self.selected_images = set()
         self.converter_thread = None
         self.color_analysis_thread = None
+        self.export_thread = None
+        self.export_progress_dialog = None
         self.current_document_index = 0
         self.pending_navigation_index = None
         self.is_converting = False
@@ -462,21 +596,48 @@ class MonochromeDetector(QMainWindow):
             QApplication.restoreOverrideCursor()
 
     def export_documents(self):
-        """Export multipage TIFF and PDF files based on the loaded import file."""
+        """Export multipage TIFF and PDF files based on the loaded import file using concurrent processing."""
         if not hasattr(self, 'file_path') or not self.file_path:
             QMessageBox.information(self, "No List", "Please load an import list first")
             return
 
+        # Show wait cursor
+        self.show_busy_cursor(True)
+        
+        # Create and show progress dialog
+        self.export_progress_dialog = ExportProgressDialog(self)
+        self.export_progress_dialog.show()
+        
+        # Start export thread
+        self.export_thread = ExportThread(self.file_path)
+        self.export_thread.progress.connect(self.on_export_progress)
+        self.export_thread.finished.connect(self.on_export_finished)
+        self.export_thread.start()
+    
+    def on_export_progress(self, completed, total, doc_name, tiff_success, pdf_success):
+        """Handle export progress updates."""
+        if self.export_progress_dialog:
+            self.export_progress_dialog.update_progress(completed, total, doc_name, tiff_success, pdf_success)
+    
+    def on_export_finished(self, num_tiffs, num_pdfs):
+        """Handle export completion."""
         try:
-            self.show_busy_cursor(True)
-            self.setWindowTitle("Monochrome Detector - Exporting...")
-            num_tiffs, num_pdfs = export_from_import_file(self.file_path)
+            # Close progress dialog
+            if self.export_progress_dialog:
+                self.export_progress_dialog.close()
+                self.export_progress_dialog = None
+            
+            # Hide wait cursor
             self.show_busy_cursor(False)
-            self.setWindowTitle("Monochrome Detector")
+            
+            # Show completion message
             QMessageBox.information(self, "Export Complete", f"Created {num_tiffs} TIFF(s) and {num_pdfs} PDF(s)")
+            
         except Exception as e:
             self.show_busy_cursor(False)
-            self.setWindowTitle("Monochrome Detector")
+            if self.export_progress_dialog:
+                self.export_progress_dialog.close()
+                self.export_progress_dialog = None
             QMessageBox.critical(self, "Export Failed", str(e))
     
     def populate_thumbnails(self):
