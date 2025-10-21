@@ -17,7 +17,7 @@ from exporter import export_from_import_file
 from thumbnails import ThumbnailWidget
 
 from color_analyser import ColorAnalysisThread
-from image_converter import ImageConverter
+from image_converter import ImageConverter, convert_image_to_g4_tiff
 from dotenv import load_dotenv
 from thumbnail_loader import ThumbnailLoader
 
@@ -33,6 +33,10 @@ class MonochromeDetector(QMainWindow):
         self.current_document_index = 0
         self.pending_navigation_index = None
         self.is_converting = False
+        
+        # Store current displayed image path and whether we're showing TIFF
+        self.current_displayed_image = None
+        self.is_showing_tiff = False
         
         self.setWindowTitle("Monochrome Detector")
         self.setGeometry(100, 100, 1200, 800)
@@ -150,6 +154,14 @@ class MonochromeDetector(QMainWindow):
         self.next_button.clicked.connect(self.show_next_document)
         self.next_button.setEnabled(False)
         nav_layout.addWidget(self.next_button)
+        
+        # Peek B&W button
+        self.peek_bw_button = QPushButton("🔍 Peek")
+        self.peek_bw_button.setMinimumHeight(40)
+        self.peek_bw_button.setEnabled(False)
+        self.peek_bw_button.pressed.connect(self.on_peek_bw_pressed)
+        self.peek_bw_button.released.connect(self.on_peek_bw_released)
+        nav_layout.addWidget(self.peek_bw_button)
         
         # Document info label
         self.doc_info_label = QLabel("No document loaded")
@@ -580,6 +592,9 @@ class MonochromeDetector(QMainWindow):
     def show_large_image(self, image_path):
         """Display large image in right panel"""
         try:
+            self.current_displayed_image = image_path
+            self.is_showing_tiff = False
+            
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
                 # Scale to fit the label while maintaining aspect ratio
@@ -590,8 +605,69 @@ class MonochromeDetector(QMainWindow):
                     Qt.TransformationMode.SmoothTransformation
                 )
                 self.large_image_label.setPixmap(scaled_pixmap)
+            
+            # Enable peek button if we have a JPG image
+            if image_path and image_path.lower().endswith('.jpg'):
+                self.peek_bw_button.setEnabled(True)
+            else:
+                self.peek_bw_button.setEnabled(False)
+                
         except Exception as e:
             print(f"Error loading large image {image_path}: {e}")
+    
+    
+    def on_peek_bw_pressed(self):
+        """Handle Peek B&W button press - show G4 TIFF preview"""
+        if not self.current_displayed_image or self.is_showing_tiff:
+            return
+        
+        # Check if it's a JPG file
+        if not self.current_displayed_image.lower().endswith('.jpg'):
+            return
+        
+        # Create or get the G4 TIFF (same path as would be created by conversion)
+        tiff_path = os.path.splitext(self.current_displayed_image)[0] + '.tif'
+        
+        # Create the TIFF if it doesn't exist
+        if not os.path.exists(tiff_path):
+            tiff_path = convert_image_to_g4_tiff(self.current_displayed_image)
+        
+        if tiff_path and os.path.exists(tiff_path):
+            try:
+                pixmap = QPixmap(tiff_path)
+                if not pixmap.isNull():
+                    # Scale to fit the label while maintaining aspect ratio
+                    label_size = self.large_image_label.size()
+                    scaled_pixmap = pixmap.scaled(
+                        label_size, 
+                        Qt.AspectRatioMode.KeepAspectRatio, 
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    self.large_image_label.setPixmap(scaled_pixmap)
+                    self.is_showing_tiff = True
+            except Exception as e:
+                print(f"Error loading TIFF {tiff_path}: {e}")
+    
+    def on_peek_bw_released(self):
+        """Handle Peek B&W button release - show original JPEG"""
+        if not self.current_displayed_image or not self.is_showing_tiff:
+            return
+        
+        # Show the original JPEG again
+        try:
+            pixmap = QPixmap(self.current_displayed_image)
+            if not pixmap.isNull():
+                # Scale to fit the label while maintaining aspect ratio
+                label_size = self.large_image_label.size()
+                scaled_pixmap = pixmap.scaled(
+                    label_size, 
+                    Qt.AspectRatioMode.KeepAspectRatio, 
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                self.large_image_label.setPixmap(scaled_pixmap)
+                self.is_showing_tiff = False
+        except Exception as e:
+            print(f"Error loading original image {self.current_displayed_image}: {e}")
     
     def analyze_colors(self):
         """Analyze all loaded images to detect monochrome candidates"""
