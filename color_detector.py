@@ -16,6 +16,36 @@ class ColorDetector:
         self.saturation_threshold = 50  # Maximum average saturation for monochrome
         self.hue_variance_threshold = 0.10  # Maximum hue variance for monochrome (stricter for color detection)
         
+    def _remove_borders(self, img: np.ndarray, border_percent: float = 0.1) -> np.ndarray:
+        """
+        Remove borders from image by cropping specified percentage from each edge.
+        
+        Args:
+            img: Input image array
+            border_percent: Percentage to remove from each edge (0.1 = 10%)
+            
+        Returns:
+            Cropped image with borders removed
+        """
+        if img is None or img.size == 0:
+            return img
+            
+        height, width = img.shape[:2]
+        
+        # Calculate border sizes
+        border_height = int(height * border_percent)
+        border_width = int(width * border_percent)
+        
+        # Ensure we don't crop more than the image size
+        border_height = min(border_height, height // 2)
+        border_width = min(border_width, width // 2)
+        
+        # Crop the image (remove borders)
+        cropped = img[border_height:height-border_height, 
+                     border_width:width-border_width]
+        
+        return cropped
+
     def analyze_image_color(self, image_path: str) -> Dict:
         """
         Analyze an image to determine if it should be converted to monochrome.
@@ -33,6 +63,18 @@ class ColorDetector:
                 return {
                     'is_monochrome': False,
                     'error': f'Could not load image: {image_path}',
+                    'confidence': 0.0,
+                    'metrics': {}
+                }
+            
+            # Remove borders (10% from each edge)
+            img = self._remove_borders(img, 0.1)
+            
+            # Check if image is too small after border removal
+            if img.shape[0] < 10 or img.shape[1] < 10:
+                return {
+                    'is_monochrome': False,
+                    'error': f'Image too small after border removal: {image_path}',
                     'confidence': 0.0,
                     'metrics': {}
                 }
@@ -143,11 +185,12 @@ class ColorDetector:
         high_hist_correlation = metrics['bgr_hist_correlation'] > 0.6  # More lenient
         
         # 5. Low ratio of highly saturated pixels
-        low_high_sat_ratio = metrics['high_saturation_ratio'] < 0.03  # Stricter to catch small colored elements
+        low_high_sat_ratio = metrics['high_saturation_ratio'] < 0.1  # Stricter to catch small colored elements
         
         # Combine criteria (image is monochrome if most criteria are met)
         criteria = [
             low_color_variance,
+            low_saturation_variance,
             similar_channels,
             low_saturation,
             low_hue_variance,
