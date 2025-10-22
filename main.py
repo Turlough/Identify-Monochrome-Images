@@ -289,8 +289,15 @@ class MonochromeDetector(QMainWindow):
         self.next_button.setEnabled(False)
         nav_layout.addWidget(self.next_button)
         
+        # Detect button
+        self.detect_button = QPushButton("🔍 Detect")
+        self.detect_button.setMinimumHeight(40)
+        self.detect_button.setEnabled(False)
+        self.detect_button.clicked.connect(self.analyze_colors)
+        nav_layout.addWidget(self.detect_button)
+        
         # Peek B&W button
-        self.peek_bw_button = QPushButton("🔍 Peek")
+        self.peek_bw_button = QPushButton("👁️ Peek")
         self.peek_bw_button.setMinimumHeight(40)
         self.peek_bw_button.setEnabled(False)
         self.peek_bw_button.pressed.connect(self.on_peek_bw_pressed)
@@ -564,9 +571,11 @@ class MonochromeDetector(QMainWindow):
         # Populate thumbnails for this document
         self.populate_thumbnails()
         
-        # Enable the analyze action if we have images
+        # Enable the analyze action and detect button if we have images
         if hasattr(self, 'analyze_action'):
             self.analyze_action.setEnabled(len(self.image_files) > 0)
+        if hasattr(self, 'detect_button'):
+            self.detect_button.setEnabled(len(self.image_files) > 0)
     
     def show_previous_document(self):
         """Navigate to previous document"""
@@ -693,9 +702,11 @@ class MonochromeDetector(QMainWindow):
         # Apply responsive sizing to match current panel width
         self.update_thumbnail_cell_sizes()
 
-        # Update analyze action state
+        # Update analyze action and detect button state
         if hasattr(self, 'analyze_action'):
             self.analyze_action.setEnabled(len(self.image_files) > 0)
+        if hasattr(self, 'detect_button'):
+            self.detect_button.setEnabled(len(self.image_files) > 0)
         
         # Reset title after loading
         try:
@@ -836,8 +847,10 @@ class MonochromeDetector(QMainWindow):
             QMessageBox.information(self, "No Images", "Please load images first")
             return
 
-        # Disable the analyze action during analysis
+        # Disable the analyze action and detect button during analysis
         self.analyze_action.setEnabled(False)
+        if hasattr(self, 'detect_button'):
+            self.detect_button.setEnabled(False)
         self.show_busy_cursor(True)
         
         # Start color analysis in separate thread
@@ -849,8 +862,10 @@ class MonochromeDetector(QMainWindow):
     def on_analysis_complete(self, monochrome_candidates: List[str]):
         """Handle completion of color analysis"""
         try:
-            # Re-enable the analyze action
+            # Re-enable the analyze action and detect button
             self.analyze_action.setEnabled(True)
+            if hasattr(self, 'detect_button'):
+                self.detect_button.setEnabled(True)
             self.show_busy_cursor(False)
             
             # Reset window title
@@ -874,6 +889,8 @@ class MonochromeDetector(QMainWindow):
             
         except Exception as e:
             self.analyze_action.setEnabled(True)
+            if hasattr(self, 'detect_button'):
+                self.detect_button.setEnabled(True)
             self.show_busy_cursor(False)
             self.setWindowTitle("Monochrome Detector")
             QMessageBox.critical(self, "Error", f"Failed to complete analysis: {str(e)}")

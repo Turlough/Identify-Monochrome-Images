@@ -13,10 +13,10 @@ class ColorDetector:
     def __init__(self):
         # Thresholds for monochrome detection (balanced for red line detection)
         self.color_variance_threshold = 0.4  # Maximum color variance for monochrome
-        self.saturation_threshold = 50  # Maximum average saturation for monochrome
+        self.saturation_threshold = 30  # Maximum average saturation for monochrome
         self.hue_variance_threshold = 0.10  # Maximum hue variance for monochrome (stricter for color detection)
         
-    def _remove_borders(self, img: np.ndarray, border_percent: float = 0.1) -> np.ndarray:
+    def _remove_borders(self, img: np.ndarray, border_percent: float = 0.2) -> np.ndarray:
         """
         Remove borders from image by cropping specified percentage from each edge.
         
@@ -68,7 +68,7 @@ class ColorDetector:
                 }
             
             # Remove borders (10% from each edge)
-            img = self._remove_borders(img, 0.1)
+            img = self._remove_borders(img, 0.2)
             
             # Check if image is too small after border removal
             if img.shape[0] < 10 or img.shape[1] < 10:
