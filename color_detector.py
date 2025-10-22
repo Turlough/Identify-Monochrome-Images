@@ -185,7 +185,7 @@ class ColorDetector:
         high_hist_correlation = metrics['bgr_hist_correlation'] > 0.6  # More lenient
         
         # 5. Low ratio of highly saturated pixels
-        low_high_sat_ratio = metrics['high_saturation_ratio'] < 0.1  # Stricter to catch small colored elements
+        low_high_sat_ratio = metrics['high_saturation_ratio'] < 0.03  # Stricter to catch small colored elements
         
         # Combine criteria (image is monochrome if most criteria are met)
         criteria = [

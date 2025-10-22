@@ -871,21 +871,26 @@ class MonochromeDetector(QMainWindow):
             # Reset window title
             self.setWindowTitle("Monochrome Detector")
             
-            # Auto-check boxes for monochrome candidates
+            # Auto-check boxes for monochrome candidates concurrently
             checked_count = 0
-            for widget in self.thumbnail_widgets:
-                if widget.image_path in monochrome_candidates:
-                    widget.checkbox.setChecked(True)
-                    self.selected_images.add(widget.image_path)
-                    checked_count += 1
+            with ThreadPoolExecutor() as executor:
+                def check_widget(widget):
+                    if widget.image_path in monochrome_candidates:
+                        widget.checkbox.setChecked(True)
+                        self.selected_images.add(widget.image_path)
+                        return 1
+                    return 0
+                
+                checked_counts = list(executor.map(check_widget, self.thumbnail_widgets))
+                checked_count = sum(checked_counts)
             
-            # Show results
-            QMessageBox.information(
-                self, 
-                "Analysis Complete", 
-                f"Found {len(monochrome_candidates)} monochrome candidates out of {len(self.image_files)} images.\n"
-                f"Auto-checked {checked_count} thumbnails for conversion."
-            )
+                # Show results
+                QMessageBox.information(
+                    self, 
+                    "Analysis Complete", 
+                    f"Found {len(monochrome_candidates)} monochrome candidates out of {len(self.image_files)} images.\n"
+                    f"Auto-checked {checked_count} thumbnails for conversion."
+                )
             
         except Exception as e:
             self.analyze_action.setEnabled(True)
