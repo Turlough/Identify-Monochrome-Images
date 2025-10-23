@@ -751,6 +751,17 @@ class MonochromeDetector(QMainWindow):
     def _on_thumb_failed(self, path: str, message: str):
         # For now, we silently ignore or could set a placeholder
         print(f"Failed to load thumbnail for {os.path.basename(path)}: {message}")
+    
+    def _refresh_thumbnail(self, image_path: str):
+        """Refresh the thumbnail for a specific image after it has been modified"""
+        widget = self._path_to_widget.get(image_path)
+        if widget is not None:
+            # Get the current cell size for the thumbnail
+            cell = widget._cell_size
+            target = QSize(max(10, cell - 4), max(10, cell - 24))
+            
+            # Request a new thumbnail with the updated image
+            self.thumbnail_loader.request(image_path, target)
 
     def update_thumbnail_cell_sizes(self):
         """Resize thumbnail cells to 15% of the thumbnail panel width (square)."""
@@ -947,6 +958,9 @@ class MonochromeDetector(QMainWindow):
             
             # Reload the image to show the saved version
             self.show_large_image(self.current_displayed_image)
+            
+            # Refresh the corresponding thumbnail
+            self._refresh_thumbnail(self.current_displayed_image)
             
         except Exception as e:
             QMessageBox.critical(self, "Error", f"Failed to save rotation: {str(e)}")
