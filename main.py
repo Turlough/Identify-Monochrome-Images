@@ -172,6 +172,9 @@ class MonochromeDetector(QMainWindow):
         self.current_displayed_image = None
         self.is_showing_tiff = False
         
+        # Rotation state for the currently displayed image
+        self.current_rotation = 0
+        
         self.setWindowTitle("Monochrome Detector")
         self.setGeometry(100, 100, 1200, 800)
         
@@ -341,6 +344,32 @@ class MonochromeDetector(QMainWindow):
         
         layout = QVBoxLayout()
         image_container.setLayout(layout)
+        
+        # Control buttons layout
+        button_layout = QHBoxLayout()
+        
+        # Rotate left button
+        self.rotate_left_button = QPushButton("↺ Rotate Left")
+        self.rotate_left_button.setMinimumHeight(40)
+        self.rotate_left_button.setEnabled(False)
+        self.rotate_left_button.clicked.connect(self.rotate_left)
+        button_layout.addWidget(self.rotate_left_button)
+        
+        # Rotate right button
+        self.rotate_right_button = QPushButton("↻ Rotate Right")
+        self.rotate_right_button.setMinimumHeight(40)
+        self.rotate_right_button.setEnabled(False)
+        self.rotate_right_button.clicked.connect(self.rotate_right)
+        button_layout.addWidget(self.rotate_right_button)
+        
+        # Save button
+        self.save_rotation_button = QPushButton("💾 Save")
+        self.save_rotation_button.setMinimumHeight(40)
+        self.save_rotation_button.setEnabled(False)
+        self.save_rotation_button.clicked.connect(self.save_rotation)
+        button_layout.addWidget(self.save_rotation_button)
+        
+        layout.addLayout(button_layout)
         
         # Large image label
         self.large_image_label = QLabel("Select an image to view")
@@ -766,6 +795,7 @@ class MonochromeDetector(QMainWindow):
         try:
             self.current_displayed_image = image_path
             self.is_showing_tiff = False
+            self.current_rotation = 0  # Reset rotation when showing new image
             
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
@@ -781,8 +811,16 @@ class MonochromeDetector(QMainWindow):
             # Enable peek button if we have a JPG image
             if image_path and image_path.lower().endswith('.jpg'):
                 self.peek_bw_button.setEnabled(True)
+                # Enable rotation buttons for JPG images
+                self.rotate_left_button.setEnabled(True)
+                self.rotate_right_button.setEnabled(True)
+                self.save_rotation_button.setEnabled(True)
             else:
                 self.peek_bw_button.setEnabled(False)
+                # Disable rotation buttons for non-JPG images
+                self.rotate_left_button.setEnabled(False)
+                self.rotate_right_button.setEnabled(False)
+                self.save_rotation_button.setEnabled(False)
                 
         except Exception as e:
             print(f"Error loading large image {image_path}: {e}")
@@ -840,6 +878,78 @@ class MonochromeDetector(QMainWindow):
                 self.is_showing_tiff = False
         except Exception as e:
             print(f"Error loading original image {self.current_displayed_image}: {e}")
+    
+    def rotate_left(self):
+        """Rotate the current image 90 degrees counter-clockwise"""
+        if not self.current_displayed_image or self.is_showing_tiff:
+            return
+        
+        self.current_rotation = (self.current_rotation - 90) % 360
+        self._apply_rotation()
+    
+    def rotate_right(self):
+        """Rotate the current image 90 degrees clockwise"""
+        if not self.current_displayed_image or self.is_showing_tiff:
+            return
+        
+        self.current_rotation = (self.current_rotation + 90) % 360
+        self._apply_rotation()
+    
+    def _apply_rotation(self):
+        """Apply the current rotation to the displayed image"""
+        if not self.current_displayed_image:
+            return
+        
+        try:
+            # Load the original image
+            image = Image.open(self.current_displayed_image)
+            
+            # Apply rotation
+            if self.current_rotation != 0:
+                rotated_image = image.rotate(-self.current_rotation, expand=True)
+            else:
+                rotated_image = image
+            
+            # Convert to QPixmap
+            from PIL.ImageQt import ImageQt
+            qt_image = ImageQt(rotated_image)
+            pixmap = QPixmap.fromImage(qt_image)
+            
+            if not pixmap.isNull():
+                # Scale to fit the label while maintaining aspect ratio
+                label_size = self.large_image_label.size()
+                scaled_pixmap = pixmap.scaled(
+                    label_size, 
+                    Qt.AspectRatioMode.KeepAspectRatio, 
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                self.large_image_label.setPixmap(scaled_pixmap)
+                
+        except Exception as e:
+            print(f"Error rotating image {self.current_displayed_image}: {e}")
+    
+    def save_rotation(self):
+        """Save the current rotation to the JPG file"""
+        if not self.current_displayed_image or self.is_showing_tiff or self.current_rotation == 0:
+            return
+        
+        try:
+            # Load the original image
+            image = Image.open(self.current_displayed_image)
+            
+            # Apply rotation and save
+            if self.current_rotation != 0:
+                rotated_image = image.rotate(-self.current_rotation, expand=True)
+                rotated_image.save(self.current_displayed_image, "JPEG", quality=95)
+            
+            # Reset rotation state
+            self.current_rotation = 0
+            
+            # Reload the image to show the saved version
+            self.show_large_image(self.current_displayed_image)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save rotation: {str(e)}")
     
     def analyze_colors(self):
         """Analyze all loaded images to detect monochrome candidates"""
