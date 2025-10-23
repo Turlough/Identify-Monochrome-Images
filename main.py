@@ -12,8 +12,8 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QCheckBox, QMenuBar, QFileDialog, QMessageBox,
                             QFrame, QSizePolicy, QPushButton, QListWidget, QListWidgetItem,
                             QProgressDialog, QDialog, QProgressBar)
-from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer
-from PyQt6.QtGui import QPixmap, QAction, QFont, QCursor, QColor
+from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer, QRect, QPoint
+from PyQt6.QtGui import QPixmap, QAction, QFont, QCursor, QColor, QPainter, QPen
 from color_detector import ColorDetector
 from exporter import export_from_import_file, export_from_import_file_concurrent
 from thumbnails import ThumbnailWidget
@@ -22,6 +22,166 @@ from color_analyser import ColorAnalysisThread
 from image_converter import ImageConverter, convert_image_to_g4_tiff
 from dotenv import load_dotenv
 from thumbnail_loader import ThumbnailLoader
+
+
+class ImageViewWidget(QLabel):
+    """Custom widget for displaying images with selection rectangle drawing capability"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.setStyleSheet("border: 1px solid #ccc; background-color: #f0f0f0;")
+        self.setMinimumSize(400, 500)
+        self.setScaledContents(False)
+        
+        # Selection rectangle state
+        self.selection_start = None
+        self.selection_end = None
+        self.is_drawing = False
+        self.selection_rect = None
+        
+        # Enable mouse tracking for drawing
+        self.setMouseTracking(True)
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press to start selection"""
+        if event.button() == Qt.MouseButton.LeftButton:
+            # Constrain start point to image bounds
+            constrained_pos = self._constrain_to_image_bounds(event.pos())
+            if constrained_pos:
+                self.selection_start = constrained_pos
+                self.selection_end = constrained_pos
+                self.is_drawing = True
+                self.selection_rect = None
+    
+    def mouseMoveEvent(self, event):
+        """Handle mouse move to update selection"""
+        if self.is_drawing:
+            # Constrain end point to image bounds
+            constrained_pos = self._constrain_to_image_bounds(event.pos())
+            if constrained_pos:
+                self.selection_end = constrained_pos
+                self.update()  # Trigger repaint
+    
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release to finish selection"""
+        if event.button() == Qt.MouseButton.LeftButton and self.is_drawing:
+            # Constrain end point to image bounds
+            constrained_pos = self._constrain_to_image_bounds(event.pos())
+            if constrained_pos:
+                self.selection_end = constrained_pos
+            self.is_drawing = False
+            
+            # Create normalized selection rectangle
+            if self.selection_start and self.selection_end:
+                # Ensure start is before end (normalize the rectangle)
+                start_x = min(self.selection_start.x(), self.selection_end.x())
+                start_y = min(self.selection_start.y(), self.selection_end.y())
+                end_x = max(self.selection_start.x(), self.selection_end.x())
+                end_y = max(self.selection_start.y(), self.selection_end.y())
+                
+                self.selection_start = QPoint(start_x, start_y)
+                self.selection_end = QPoint(end_x, end_y)
+                
+                self.selection_rect = self._normalize_selection()
+    
+    def paintEvent(self, event):
+        """Custom paint event to draw selection rectangle"""
+        super().paintEvent(event)
+        
+        if self.is_drawing and self.selection_start and self.selection_end:
+            painter = QPainter(self)
+            painter.setPen(QPen(QColor(255, 0, 0), 2, Qt.PenStyle.SolidLine))
+            
+            # Draw selection rectangle
+            rect = QRect(self.selection_start, self.selection_end).normalized()
+            painter.drawRect(rect)
+    
+    def _normalize_selection(self):
+        """Convert selection coordinates to normalized values (0-1) based on image size"""
+        if not self.selection_start or not self.selection_end:
+            return None
+        
+        # Get the actual image size within the label
+        pixmap = self.pixmap()
+        if pixmap.isNull():
+            return None
+        
+        # Calculate the displayed image size and position
+        label_size = self.size()
+        pixmap_size = pixmap.size()
+        
+        # Calculate scaling to fit the label while maintaining aspect ratio
+        scale_x = label_size.width() / pixmap_size.width()
+        scale_y = label_size.height() / pixmap_size.height()
+        scale = min(scale_x, scale_y)
+        
+        # Calculate the actual displayed image size
+        displayed_width = int(pixmap_size.width() * scale)
+        displayed_height = int(pixmap_size.height() * scale)
+        
+        # Calculate the offset to center the image
+        offset_x = (label_size.width() - displayed_width) // 2
+        offset_y = (label_size.height() - displayed_height) // 2
+        
+        # Convert selection coordinates to image coordinates
+        start_x = max(0, (self.selection_start.x() - offset_x) / scale)
+        start_y = max(0, (self.selection_start.y() - offset_y) / scale)
+        end_x = min(pixmap_size.width(), (self.selection_end.x() - offset_x) / scale)
+        end_y = min(pixmap_size.height(), (self.selection_end.y() - offset_y) / scale)
+        
+        # Ensure valid rectangle with minimum size
+        if start_x >= end_x or start_y >= end_y:
+            return None
+        
+        # Check for minimum selection size (at least 10x10 pixels)
+        if (end_x - start_x) < 10 or (end_y - start_y) < 10:
+            return None
+        
+        # Return normalized coordinates (0-1)
+        return {
+            'x': start_x / pixmap_size.width(),
+            'y': start_y / pixmap_size.height(),
+            'width': (end_x - start_x) / pixmap_size.width(),
+            'height': (end_y - start_y) / pixmap_size.height()
+        }
+    
+    def _constrain_to_image_bounds(self, pos):
+        """Constrain a point to the actual image bounds within the widget"""
+        pixmap = self.pixmap()
+        if pixmap.isNull():
+            return None
+        
+        # Calculate the displayed image size and position
+        label_size = self.size()
+        pixmap_size = pixmap.size()
+        
+        # Calculate scaling to fit the label while maintaining aspect ratio
+        scale_x = label_size.width() / pixmap_size.width()
+        scale_y = label_size.height() / pixmap_size.height()
+        scale = min(scale_x, scale_y)
+        
+        # Calculate the actual displayed image size
+        displayed_width = int(pixmap_size.width() * scale)
+        displayed_height = int(pixmap_size.height() * scale)
+        
+        # Calculate the offset to center the image
+        offset_x = (label_size.width() - displayed_width) // 2
+        offset_y = (label_size.height() - displayed_height) // 2
+        
+        # Constrain the point to the image bounds
+        constrained_x = max(offset_x, min(offset_x + displayed_width, pos.x()))
+        constrained_y = max(offset_y, min(offset_y + displayed_height, pos.y()))
+        
+        return QPoint(constrained_x, constrained_y)
+    
+    def clear_selection(self):
+        """Clear the current selection"""
+        self.selection_start = None
+        self.selection_end = None
+        self.selection_rect = None
+        self.is_drawing = False
+        self.update()
 
 
 class ExportProgressDialog(QDialog):
@@ -174,6 +334,9 @@ class MonochromeDetector(QMainWindow):
         
         # Rotation state for the currently displayed image
         self.current_rotation = 0
+        
+        # Crop state for the currently displayed image
+        self.current_crop_rect = None
         
         self.setWindowTitle("Monochrome Detector")
         self.setGeometry(100, 100, 1200, 800)
@@ -362,6 +525,13 @@ class MonochromeDetector(QMainWindow):
         self.rotate_right_button.clicked.connect(self.rotate_right)
         button_layout.addWidget(self.rotate_right_button)
         
+        # Crop button
+        self.crop_button = QPushButton("✂️ Crop")
+        self.crop_button.setMinimumHeight(40)
+        self.crop_button.setEnabled(False)
+        self.crop_button.clicked.connect(self.crop_image)
+        button_layout.addWidget(self.crop_button)
+        
         # Save button
         self.save_rotation_button = QPushButton("💾 Save")
         self.save_rotation_button.setMinimumHeight(40)
@@ -371,12 +541,9 @@ class MonochromeDetector(QMainWindow):
         
         layout.addLayout(button_layout)
         
-        # Large image label
-        self.large_image_label = QLabel("Select an image to view")
-        self.large_image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.large_image_label.setStyleSheet("border: 1px solid #ccc; background-color: #f0f0f0;")
-        self.large_image_label.setMinimumSize(400, 500)
-        self.large_image_label.setScaledContents(False)
+        # Large image widget with selection capability
+        self.large_image_label = ImageViewWidget()
+        self.large_image_label.setText("Select an image to view")
         
         layout.addWidget(self.large_image_label)
         
@@ -807,6 +974,10 @@ class MonochromeDetector(QMainWindow):
             self.current_displayed_image = image_path
             self.is_showing_tiff = False
             self.current_rotation = 0  # Reset rotation when showing new image
+            self.current_crop_rect = None  # Reset crop when showing new image
+            
+            # Clear any existing selection
+            self.large_image_label.clear_selection()
             
             pixmap = QPixmap(image_path)
             if not pixmap.isNull():
@@ -822,15 +993,17 @@ class MonochromeDetector(QMainWindow):
             # Enable peek button if we have a JPG image
             if image_path and image_path.lower().endswith('.jpg'):
                 self.peek_bw_button.setEnabled(True)
-                # Enable rotation buttons for JPG images
+                # Enable rotation and crop buttons for JPG images
                 self.rotate_left_button.setEnabled(True)
                 self.rotate_right_button.setEnabled(True)
+                self.crop_button.setEnabled(True)
                 self.save_rotation_button.setEnabled(True)
             else:
                 self.peek_bw_button.setEnabled(False)
-                # Disable rotation buttons for non-JPG images
+                # Disable rotation and crop buttons for non-JPG images
                 self.rotate_left_button.setEnabled(False)
                 self.rotate_right_button.setEnabled(False)
+                self.crop_button.setEnabled(False)
                 self.save_rotation_button.setEnabled(False)
                 
         except Exception as e:
@@ -939,22 +1112,100 @@ class MonochromeDetector(QMainWindow):
         except Exception as e:
             print(f"Error rotating image {self.current_displayed_image}: {e}")
     
-    def save_rotation(self):
-        """Save the current rotation to the JPG file"""
-        if not self.current_displayed_image or self.is_showing_tiff or self.current_rotation == 0:
+    def crop_image(self):
+        """Crop the image to the selected rectangle"""
+        if not self.current_displayed_image or self.is_showing_tiff:
+            return
+        
+        # Get the current selection from the image widget
+        selection = self.large_image_label.selection_rect
+        if not selection:
+            QMessageBox.information(self, "No Selection", "Please draw a selection rectangle first")
             return
         
         try:
             # Load the original image
             image = Image.open(self.current_displayed_image)
             
-            # Apply rotation and save
+            # Apply rotation first if needed
             if self.current_rotation != 0:
-                rotated_image = image.rotate(-self.current_rotation, expand=True)
-                rotated_image.save(self.current_displayed_image, "JPEG", quality=95)
+                image = image.rotate(-self.current_rotation, expand=True)
             
-            # Reset rotation state
+            # Convert normalized coordinates to pixel coordinates
+            width, height = image.size
+            x = int(selection['x'] * width)
+            y = int(selection['y'] * height)
+            w = int(selection['width'] * width)
+            h = int(selection['height'] * height)
+            
+            # Crop the image
+            cropped_image = image.crop((x, y, x + w, y + h))
+            
+            # Store the crop rectangle for saving
+            self.current_crop_rect = selection
+            
+            # Display the cropped image
+            self._display_cropped_image(cropped_image)
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to crop image: {str(e)}")
+    
+    def _display_cropped_image(self, image):
+        """Display a cropped image in the preview"""
+        try:
+            # Convert PIL image to QPixmap
+            from PIL.ImageQt import ImageQt
+            qt_image = ImageQt(image)
+            pixmap = QPixmap.fromImage(qt_image)
+            
+            if not pixmap.isNull():
+                # Scale to fit the label while maintaining aspect ratio
+                label_size = self.large_image_label.size()
+                scaled_pixmap = pixmap.scaled(
+                    label_size, 
+                    Qt.AspectRatioMode.KeepAspectRatio, 
+                    Qt.TransformationMode.SmoothTransformation
+                )
+                self.large_image_label.setPixmap(scaled_pixmap)
+                # Clear selection after cropping
+                self.large_image_label.clear_selection()
+                
+        except Exception as e:
+            print(f"Error displaying cropped image: {e}")
+    
+    def save_rotation(self):
+        """Save the current rotation and/or crop to the JPG file"""
+        if not self.current_displayed_image or self.is_showing_tiff:
+            return
+        
+        # Check if there are any changes to save
+        if self.current_rotation == 0 and not self.current_crop_rect:
+            QMessageBox.information(self, "No Changes", "No rotation or crop changes to save")
+            return
+        
+        try:
+            # Load the original image
+            image = Image.open(self.current_displayed_image)
+            
+            # Apply rotation first if needed
+            if self.current_rotation != 0:
+                image = image.rotate(-self.current_rotation, expand=True)
+            
+            # Apply crop if needed
+            if self.current_crop_rect:
+                width, height = image.size
+                x = int(self.current_crop_rect['x'] * width)
+                y = int(self.current_crop_rect['y'] * height)
+                w = int(self.current_crop_rect['width'] * width)
+                h = int(self.current_crop_rect['height'] * height)
+                image = image.crop((x, y, x + w, y + h))
+            
+            # Save the modified image
+            image.save(self.current_displayed_image, "JPEG", quality=95)
+            
+            # Reset states
             self.current_rotation = 0
+            self.current_crop_rect = None
             
             # Reload the image to show the saved version
             self.show_large_image(self.current_displayed_image)
@@ -963,7 +1214,7 @@ class MonochromeDetector(QMainWindow):
             self._refresh_thumbnail(self.current_displayed_image)
             
         except Exception as e:
-            QMessageBox.critical(self, "Error", f"Failed to save rotation: {str(e)}")
+            QMessageBox.critical(self, "Error", f"Failed to save changes: {str(e)}")
     
     def analyze_colors(self):
         """Analyze all loaded images to detect monochrome candidates"""
