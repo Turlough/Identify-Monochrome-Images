@@ -591,7 +591,6 @@ class MonochromeDetector(QMainWindow):
                     self.export_action.setEnabled(True)
                 
                 self.show_busy_cursor(False)
-                QMessageBox.information(self, "Success", f"Loaded {len(self.document_data)} documents")
                 
             except Exception as e:
                 self.show_busy_cursor(False)
@@ -1255,17 +1254,7 @@ class MonochromeDetector(QMainWindow):
                         self.selected_images.add(widget.image_path)
                         return 1
                     return 0
-                
                 checked_counts = list(executor.map(check_widget, self.thumbnail_widgets))
-                checked_count = sum(checked_counts)
-            
-                # Show results
-                QMessageBox.information(
-                    self, 
-                    "Analysis Complete", 
-                    f"Found {len(monochrome_candidates)} monochrome candidates out of {len(self.image_files)} images.\n"
-                    f"Auto-checked {checked_count} thumbnails for conversion."
-                )
             
         except Exception as e:
             self.analyze_action.setEnabled(True)
@@ -1332,7 +1321,6 @@ class MonochromeDetector(QMainWindow):
             # Remove converted items from grid
             self.remove_converted_items(converted_files)
             
-            QMessageBox.information(self, "Success", f"Converted {len(converted_files)} images to G4 TIFF")
             
         except Exception as e:
             self.show_busy_cursor(False)
