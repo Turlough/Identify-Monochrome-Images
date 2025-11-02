@@ -22,7 +22,7 @@ with open(import_file, 'r', encoding='utf-8') as f:
         if len(parts) > 1:
             tiff_name = parts[0].strip() + '.tif'
             # Count input files and build dictionary
-            expected_count = sum(1 for p in parts[1:])
+            expected_count = sum(1 for p in parts[2:])
             expected_pages[tiff_name] = expected_count
 
 # Check actual page counts in output TIFFs
