@@ -6,10 +6,17 @@ import numpy as np
 from PIL import Image
 from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
+import os
+from dotenv import load_dotenv
 from .export_pdf import _save_pdf
 from .export_mpt_imagemagick import _save_multipage_tiff
 
 logging.basicConfig(level=logging.INFO)
+
+# Load environment variables
+load_dotenv()
+NUM_DATA_COLUMNS = int(os.getenv('NUM_DATA_COLUMNS', '2'))
+FILENAME_COLUMN = int(os.getenv('FILENAME_COLUMN', '1'))
 
 def _read_import_list(import_file: str) -> List[List[str]]:
     """Read the import text/csv file into rows.
@@ -57,8 +64,8 @@ def _export_single_document(row: List[str], import_file: str, mpt_dir: Path, pdf
     
     Returns: (doc_name, tiff_success, pdf_success)
     """
-    doc_name = Path(row[0]).stem  # Column 1 is the image/document name base
-    page_cells = row[1:]
+    doc_name = Path(row[FILENAME_COLUMN]).stem
+    page_cells = row[NUM_DATA_COLUMNS:]
     images = _resolve_images(import_file, page_cells)
     images = [p for p in images if p.exists()]
     
@@ -98,8 +105,8 @@ def export_from_import_file(import_file: str) -> Tuple[int, int]:
     num_pdfs = 0
 
     for row in rows:
-        doc_name = Path(row[0]).stem  # Column 1 is the image/document name base
-        page_cells = row[1:]
+        doc_name = Path(row[FILENAME_COLUMN]).stem
+        page_cells = row[NUM_DATA_COLUMNS:]
         images = _resolve_images(import_file, page_cells)
         images = [p for p in images if p.exists()]
         if not images:
@@ -140,7 +147,7 @@ def export_from_import_file_concurrent(import_file: str, progress_callback=None)
     # Filter out rows with no valid images
     valid_rows = []
     for row in rows:
-        page_cells = row[1:]
+        page_cells = row[NUM_DATA_COLUMNS:]
         images = _resolve_images(import_file, page_cells)
         images = [p for p in images if p.exists()]
         if images:

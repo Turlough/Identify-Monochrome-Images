@@ -316,6 +316,11 @@ class ExportThread(QThread):
 class MonochromeDetector(QMainWindow):
     def __init__(self):
         super().__init__()
+        # Load environment variables
+        load_dotenv()
+        self.num_data_columns = int(os.getenv('NUM_DATA_COLUMNS', '2'))
+        self.filename_column = int(os.getenv('FILENAME_COLUMN', '1'))
+        
         self.document_data = []
         self.image_files = []
         self.thumbnail_widgets = []
@@ -600,13 +605,13 @@ class MonochromeDetector(QMainWindow):
         """Populate the document list widget"""
         self.document_list_widget.clear()
         for idx, row in enumerate(self.document_data):
-            # Use second column as document display name
-            doc_name = row[1] if len(row) > 1 else (row[0] if row else "Unknown")
+            # Use filename column as document display name
+            doc_name = row[self.filename_column] if len(row) > self.filename_column else (row[0] if row else "Unknown")
             
-            # Count JPG files (color) and total files (starting from index 2, first two are metadata)
+            # Count JPG files (color) and total files (starting after data columns)
             jpg_count = 0
             total_count = 0
-            for i in range(2, len(row)):
+            for i in range(self.num_data_columns, len(row)):
                 filename = row[i].strip()
                 if filename:  # Skip empty entries
                     # Only count .jpg and .tif files
@@ -729,8 +734,8 @@ class MonochromeDetector(QMainWindow):
         
         current_row = self.document_data[self.current_document_index]
         
-        # Find the first JPG file (starting from index 2, first two are metadata)
-        for i in range(2, len(current_row)):
+        # Find the first JPG file (starting after data columns)
+        for i in range(self.num_data_columns, len(current_row)):
             image_name = current_row[i].strip()
             if image_name.lower().endswith('.jpg'):
                 # Resolve relative paths against the source file's directory
@@ -748,16 +753,16 @@ class MonochromeDetector(QMainWindow):
         self.image_files = []
         current_row = self.document_data[self.current_document_index]
         
-        # Extract JPG files from current document row (starting from index 2, first two are metadata)
-        for i in range(2, len(current_row)):
+        # Extract JPG files from current document row (starting after data columns)
+        for i in range(self.num_data_columns, len(current_row)):
             image_name = current_row[i].strip()
             if image_name.lower().endswith('.jpg'):
                 # Resolve relative paths against the source file's directory
                 image_path = image_name if os.path.isabs(image_name) else os.path.join(self.base_dir, image_name)
                 self.image_files.append(image_path)
         
-        # Update document info label using second column as display name
-        doc_name = current_row[1] if len(current_row) > 1 else (current_row[0] if current_row else "Unknown")
+        # Update document info label using filename column as display name
+        doc_name = current_row[self.filename_column] if len(current_row) > self.filename_column else (current_row[0] if current_row else "Unknown")
         self.doc_info_label.setText(f"Document {self.current_document_index + 1} of {len(self.document_data)}: {doc_name}")
         
         # Update selection in document list
@@ -1336,9 +1341,9 @@ class MonochromeDetector(QMainWindow):
             new_filename = os.path.basename(new_path)
             filename_mapping[old_filename] = new_filename
         
-        # Update document data (starting from index 2, first two are metadata)
+        # Update document data (starting after data columns)
         for row in self.document_data:
-            for i in range(2, len(row)):
+            for i in range(self.num_data_columns, len(row)):
                 filename = row[i].strip()
                 if filename in filename_mapping:
                     row[i] = filename_mapping[filename]
