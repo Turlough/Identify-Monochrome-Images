@@ -17,6 +17,12 @@ logging.basicConfig(level=logging.INFO)
 load_dotenv()
 NUM_DATA_COLUMNS = int(os.getenv('NUM_DATA_COLUMNS', '2'))
 FILENAME_COLUMN = int(os.getenv('FILENAME_COLUMN', '1'))
+REPLACE_OUTPUT_FILES = os.getenv('REPLACE_OUTPUT_FILES', 'False').lower() == 'true'
+
+if REPLACE_OUTPUT_FILES:
+    logging.info("REPLACE_OUTPUT_FILES is True, existing output files will be replaced")
+else:
+    logging.info("REPLACE_OUTPUT_FILES is False, existing output files will not be replaced")   
 
 def _read_import_list(import_file: str) -> List[List[str]]:
     """Read the import text/csv file into rows.
@@ -79,12 +85,18 @@ def _export_single_document(row: List[str], import_file: str, mpt_dir: Path, pdf
     pdf_success = False
 
     try:
+        if not REPLACE_OUTPUT_FILES and tiff_out.exists():
+            logging.info(f"TIFF already exists: {tiff_out}")
+            return doc_name, True, False
         _save_multipage_tiff(tiff_out, images)
         tiff_success = tiff_out.exists()
     except Exception as e:
         logging.error(f"Error saving TIFF for {doc_name}: {e}")
 
     try:
+        if not REPLACE_OUTPUT_FILES and pdf_out.exists():
+            logging.info(f"PDF already exists: {pdf_out}")
+            return doc_name, True, False
         _save_pdf(pdf_out, images)
         pdf_success = pdf_out.exists()
     except Exception as e:
@@ -116,6 +128,9 @@ def export_from_import_file(import_file: str) -> Tuple[int, int]:
         pdf_out = pdf_dir / f"{doc_name}.pdf"
 
         try:
+            if not REPLACE_OUTPUT_FILES and tiff_out.exists():
+                logging.info(f"TIFF already exists: {tiff_out}")
+
             _save_multipage_tiff(tiff_out, images)
             num_tiffs += 1 if tiff_out.exists() else 0
         except Exception as e:

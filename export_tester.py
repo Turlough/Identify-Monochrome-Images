@@ -9,7 +9,13 @@ load_dotenv()
 NUM_DATA_COLUMNS = int(os.getenv('NUM_DATA_COLUMNS', '2'))
 FILENAME_COLUMN = int(os.getenv('FILENAME_COLUMN', '1'))
 
-import_file = r"C:\_PV\DAHG\EXPORT-small.TXT"
+import_file = input("Enter the path to the import file:\n\t-> ").replace('&', '').replace('"', '').replace("'", "").strip()
+if not import_file:
+    print("No import file provided")
+    exit(1)
+if not os.path.exists(import_file):
+    print(f"Import file does not exist: {import_file}")
+    exit(1)
 
 num_tiffs, num_pdfs = export_from_import_file(import_file)
 
@@ -46,7 +52,7 @@ def check_page_counts(mpt_dir):
                 else:
                     print(f"{tiff_name}: MISMATCH - Expected {expected_count}, got {actual_count} pages")
 
-check_page_counts(expected_pages, mpt_dir)
+check_page_counts(mpt_dir)
 
 
 
