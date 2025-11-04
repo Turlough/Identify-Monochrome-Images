@@ -18,11 +18,17 @@ load_dotenv()
 NUM_DATA_COLUMNS = int(os.getenv('NUM_DATA_COLUMNS', '2'))
 FILENAME_COLUMN = int(os.getenv('FILENAME_COLUMN', '1'))
 REPLACE_OUTPUT_FILES = os.getenv('REPLACE_OUTPUT_FILES', 'False').lower() == 'true'
+CONCURRENT_EXPORT = os.getenv('CONCURRENT_EXPORT', 'False').lower() == 'true'
 
 if REPLACE_OUTPUT_FILES:
     logging.info("REPLACE_OUTPUT_FILES is True, existing output files will be replaced")
 else:
     logging.info("REPLACE_OUTPUT_FILES is False, existing output files will not be replaced")   
+
+if CONCURRENT_EXPORT:
+    logging.info("CONCURRENT_EXPORT is True, using concurrent export")
+else:
+    logging.info("CONCURRENT_EXPORT is False, using single-threaded export")
 
 def _read_import_list(import_file: str) -> List[List[str]]:
     """Read the import text/csv file into rows.
@@ -130,7 +136,7 @@ def export_from_import_file(import_file: str) -> Tuple[int, int]:
         try:
             if not REPLACE_OUTPUT_FILES and tiff_out.exists():
                 logging.info(f"TIFF already exists: {tiff_out}")
-
+                continue
             _save_multipage_tiff(tiff_out, images)
             num_tiffs += 1 if tiff_out.exists() else 0
         except Exception as e:
@@ -138,6 +144,9 @@ def export_from_import_file(import_file: str) -> Tuple[int, int]:
             pass
 
         try:
+            if not REPLACE_OUTPUT_FILES and pdf_out.exists():
+                logging.info(f"PDF already exists: {pdf_out}")
+                continue
             _save_pdf(pdf_out, images)
             num_pdfs += 1 if pdf_out.exists() else 0
         except Exception as e:
@@ -176,9 +185,28 @@ def export_from_import_file_concurrent(import_file: str, progress_callback=None)
     completed = 0
     total = len(valid_rows)
     
+    # If concurrent export is disabled, run single-threaded with progress updates
+    if not CONCURRENT_EXPORT:
+        for row in valid_rows:
+            try:
+                doc_name, tiff_success, pdf_success = _export_single_document(row, import_file, mpt_dir, pdf_dir)
+                completed += 1
+                if tiff_success:
+                    num_tiffs += 1
+                if pdf_success:
+                    num_pdfs += 1
+                if progress_callback:
+                    progress_callback(completed, total, doc_name, tiff_success, pdf_success)
+            except Exception as e:
+                logging.error(f"Error processing document: {e}")
+                completed += 1
+                if progress_callback:
+                    progress_callback(completed, total, "Error", False, False)
+        return num_tiffs, num_pdfs
+
     # Use ThreadPoolExecutor for concurrent processing
     max_workers = min(4, len(valid_rows))  # Limit to 4 concurrent exports
-    
+
     with ThreadPoolExecutor(max_workers=max_workers) as executor:
         # Submit all tasks
         future_to_row = {
