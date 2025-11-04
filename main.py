@@ -595,6 +595,10 @@ class MonochromeDetector(QMainWindow):
                 if hasattr(self, 'export_action'):
                     self.export_action.setEnabled(True)
                 
+                # Update window title to show the import file path
+                self.setWindowTitle(f"Monochrome Detector - {selected_path}")
+                QApplication.processEvents()  # Force immediate UI update
+                
                 self.show_busy_cursor(False)
                 
             except Exception as e:

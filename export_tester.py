@@ -21,15 +21,11 @@ num_tiffs, num_pdfs = export_from_import_file(import_file)
 
 print(f"Exported {num_tiffs} TIFFs and {num_pdfs} PDFs")
 
-
 # Get base directory from import file path
 base_dir = os.path.dirname(import_file)
 mpt_dir = Path(base_dir + "_mpt") 
 
 # Read the import file to get expected page counts
-
-
-
 def check_page_counts(mpt_dir):
 
     expected_pages = {}
