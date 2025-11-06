@@ -375,6 +375,13 @@ class MonochromeDetector(QMainWindow):
         file_menu.addAction(analyze_action)
         self.analyze_action = analyze_action  # Store reference for enabling/disabling
         
+        # Clone Previous pattern action
+        clone_prev_action = QAction('Clone Previous', self)
+        clone_prev_action.triggered.connect(self.clone_previous_pattern)
+        clone_prev_action.setEnabled(False)  # Enabled when a previous doc exists
+        file_menu.addAction(clone_prev_action)
+        self.clone_previous_action = clone_prev_action
+        
         # Convert action
         convert_action = QAction('Convert', self)
         convert_action.triggered.connect(self.convert_selected)
@@ -780,6 +787,10 @@ class MonochromeDetector(QMainWindow):
             self.analyze_action.setEnabled(len(self.image_files) > 0)
         if hasattr(self, 'detect_button'):
             self.detect_button.setEnabled(len(self.image_files) > 0)
+        # Enable Clone Previous when there is a previous document and images
+        if hasattr(self, 'clone_previous_action'):
+            has_prev = self.current_document_index > 0
+            self.clone_previous_action.setEnabled(has_prev and len(self.image_files) > 0)
     
     def show_previous_document(self):
         """Navigate to previous document"""
@@ -800,6 +811,61 @@ class MonochromeDetector(QMainWindow):
         
         self.prev_button.setEnabled(self.current_document_index > 0)
         self.next_button.setEnabled(self.current_document_index < len(self.document_data) - 1)
+        # Keep Clone Previous state in sync
+        if hasattr(self, 'clone_previous_action'):
+            has_prev = self.current_document_index > 0 and len(self.image_files) > 0
+            self.clone_previous_action.setEnabled(has_prev)
+
+    def clone_previous_pattern(self):
+        """Clone the previous document's JPG/TIF pattern to this document.
+        For each page position where the previous document is TIF and the current is JPG,
+        select the current JPG for conversion (respecting the rule that the first JPG cannot be selected).
+        """
+        try:
+            if not self.document_data or self.current_document_index <= 0:
+                QMessageBox.information(self, "No Previous Document", "There is no previous document to clone from.")
+                return
+            prev_row = self.document_data[self.current_document_index - 1]
+            curr_row = self.document_data[self.current_document_index]
+            if not prev_row or not curr_row:
+                return
+            # Compare page counts (non-empty cells from num_data_columns onwards)
+            prev_pages = [c.strip() for c in prev_row[self.num_data_columns:] if c and c.strip()]
+            curr_pages = [c.strip() for c in curr_row[self.num_data_columns:] if c and c.strip()]
+            if len(prev_pages) != len(curr_pages):
+                QMessageBox.warning(
+                    self,
+                    "Page Count Mismatch",
+                    f"Previous document has {len(prev_pages)} page(s) while current has {len(curr_pages)}.\n\n"
+                    "The pattern will be applied only to the overlapping pages."
+                )
+            # Identify the first JPG file path in the current document to avoid selecting it
+            first_jpg_path = self.get_first_jpg_in_current_document()
+            # Iterate over page cells in lockstep
+            max_i = min(len(prev_row), len(curr_row))
+            applied = 0
+            for i in range(self.num_data_columns, max_i):
+                prev_cell = prev_row[i].strip() if i < len(prev_row) else ''
+                curr_cell = curr_row[i].strip() if i < len(curr_row) else ''
+                if not prev_cell or not curr_cell:
+                    continue
+                # If previous page is TIF and current page is JPG, select the current JPG
+                if prev_cell.lower().endswith('.tif') and curr_cell.lower().endswith('.jpg'):
+                    # Resolve path just like when populating thumbnails
+                    image_path = curr_cell if os.path.isabs(curr_cell) else os.path.join(self.base_dir, curr_cell)
+                    # Skip first JPG safeguard
+                    if first_jpg_path and image_path == first_jpg_path:
+                        continue
+                    widget = self._path_to_widget.get(image_path)
+                    if widget is not None and not widget.is_checked():
+                        widget.checkbox.setChecked(True)
+                        applied += 1
+            if applied == 0:
+                QMessageBox.information(self, "Clone Previous", "No matching pages to select from the previous pattern.")
+            else:
+                QMessageBox.information(self, "Clone Previous", f"Selected {applied} page(s) to match the previous pattern.")
+        except Exception as e:
+            QMessageBox.critical(self, "Clone Previous Failed", str(e))
     
     def show_busy_cursor(self, show=True):
         """Show or hide busy cursor"""
