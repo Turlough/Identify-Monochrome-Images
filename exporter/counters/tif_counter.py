@@ -28,7 +28,7 @@ class TifCounter(PageCounter):
         future_to_filename = {}
         with ThreadPoolExecutor() as executor:
             for filename in self.counting_results.keys():
-                path = self.output_dir / filename
+                path = self.output_dir / f'{filename}{self.extension}'
                 future = executor.submit(self.count_document_pages, filename, path)
                 future_to_filename[future] = filename
 
