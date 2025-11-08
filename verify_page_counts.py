@@ -37,7 +37,7 @@ def verify_page_counts(counters: list[PageCounter]):
                 counter.create_rework_file(failed_files)
                 print(f"Rework file created: {counter.rework_file}")
             else:
-                logging.info("No failed files found")
+                logging.info("Exiting")
         else:
             logging.info("No failed files found")
 
@@ -45,7 +45,7 @@ def main():
     import_file = input("Enter the path to the import file:\n\t-> ").replace('&', '').replace('"', '').replace("'", "").strip()
     tif_counter = TifCounter(import_file)
     pdf_counter = PdfCounter(import_file)
-    counters = [tif_counter]
+    counters = [tif_counter, pdf_counter]
     verify_page_counts(counters)
 
 if __name__ == "__main__":
