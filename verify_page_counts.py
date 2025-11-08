@@ -18,12 +18,7 @@ def count_all_pages_concurrently(counter: PageCounter):
 
     return list(counter.counting_results.values()) # return a list of PageCount objects
 
-
-def main():
-    import_file = input("Enter the path to the import file:\n\t-> ").replace('&', '').replace('"', '').replace("'", "").strip()
-    tif_counter = TifCounter(import_file)
-    pdf_counter = PdfCounter(import_file)
-    counters = [tif_counter]
+def verify_page_counts(counters: list[PageCounter]):
     for counter in counters:
 
         all_counts = count_all_pages_concurrently(counter)
@@ -46,6 +41,12 @@ def main():
         else:
             logging.info("No failed files found")
 
+def main():
+    import_file = input("Enter the path to the import file:\n\t-> ").replace('&', '').replace('"', '').replace("'", "").strip()
+    tif_counter = TifCounter(import_file)
+    pdf_counter = PdfCounter(import_file)
+    counters = [tif_counter]
+    verify_page_counts(counters)
 
 if __name__ == "__main__":
     main()

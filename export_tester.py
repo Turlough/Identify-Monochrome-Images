@@ -1,9 +1,11 @@
-from exporter import export_from_import_file
+from exporter import TifCounter, PdfCounter, export_from_import_file
 from pathlib import Path
 from PIL import Image
 import os
 from dotenv import load_dotenv
 import logging
+
+from verify_page_counts import verify_page_counts
 
 # Load environment variables
 load_dotenv()
@@ -30,11 +32,9 @@ mpt_dir = Path(base_dir + "_mpt")
 
 # Read the import file to get expected page counts
 
-failed_pages = check_page_counts(mpt_dir)
-if failed_pages:
-    logging.error(f"Failed page counts: {failed_pages}")
-    exit(1)
-else:
-    logging.info("All page counts match")
+tif_counter = TifCounter(import_file)
+pdf_counter = PdfCounter(import_file)
+counters = [tif_counter, pdf_counter]
+verify_page_counts(counters)
 
 

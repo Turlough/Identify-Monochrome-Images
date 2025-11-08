@@ -30,7 +30,7 @@ def _save_multipage_tiff(output_path: Path, images: List[Path]) -> None:
     output_path = Path(output_path)
     output_path.parent.mkdir(parents=True, exist_ok=True)
     
-    logging.info(f"Creating multipage TIFF with ImageMagick: {output_path}")
+    logging.debug(f"Creating multipage TIFF with ImageMagick: {output_path}")
     
     # Create a list to hold all converted images
     converted_images = []
@@ -59,9 +59,8 @@ def _save_multipage_tiff(output_path: Path, images: List[Path]) -> None:
                         processed_img.compression = 'group4'
                         processed_img.type = 'bilevel'  # Ensure 1-bit
                         processed_img.colorspace = 'gray'
-                        logging.info(f"Applied G4 compression to {img_path}")
+                        logging.debug(f"Applied G4 compression to {img_path}")
                         processed_img.resolution = 300
-                        logging.info(f"Preserved DPI {processed_img.resolution} from {img_path}")
                         
                     else:
                         # For color images (JPG, other TIFFs), use JPEG compression
@@ -70,7 +69,7 @@ def _save_multipage_tiff(output_path: Path, images: List[Path]) -> None:
                         # Convert to RGB if not already
                         if processed_img.colorspace != 'rgb':
                             processed_img.colorspace = 'rgb'
-                        logging.info(f"Applied JPEG compression to {img_path}")
+                        logging.debug(f"Applied JPEG compression to {img_path}")
                     
                     # Add to list (this creates a copy)
                     converted_images.append(processed_img.clone())
