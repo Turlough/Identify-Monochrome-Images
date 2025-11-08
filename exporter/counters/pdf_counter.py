@@ -16,28 +16,13 @@ class PdfCounter(PageCounter):
             return
 
         try:
-            # For performance, only read PDF metadata when possible
-            # This could be faster than reading the full file, but pypdf loads the structure anyway.
-            # Direct file seeking or custom parsing is error-prone.
-            # Here is the best with PyPDF: open in binary mode and count "/Type /Page" strings as a heuristic.
-            # This is much faster for large files and is robust for most PDFs.
-            try:
-                with open(path, "rb") as f:
-                    data = f.read()
-                    actual_count = data.count(b"/Type /Page")
-                    if actual_count == 0:
-                        # Fallback to slow method if heuristic fails
-                        reader = PdfReader(path)
-                        actual_count = reader.get_num_pages()
-            except Exception:
-                reader = PdfReader(path)
-                actual_count = reader.get_num_pages()
+            reader = PdfReader(path)
+            actual_count = reader.get_num_pages()
             self.counting_results[filename].actual_count = actual_count
             return actual_count
-
-
         except Exception as e:
             self.counting_results[filename].actual_count = 0
+            return 0
 
 
     def count_batch_pages_concurrently(self, progress_callback=None):
@@ -45,7 +30,7 @@ class PdfCounter(PageCounter):
         future_to_filename = {}
         with ThreadPoolExecutor() as executor:
             for filename in self.counting_results.keys():
-                path = self.output_dir / f"{filename}{self.extension}"
+                path = self.output_dir / f"{filename}"
                 future = executor.submit(self.count_document_pages, filename, path)
                 future_to_filename[future] = filename
 

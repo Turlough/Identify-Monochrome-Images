@@ -24,11 +24,11 @@ class TifCounter(PageCounter):
             self.counting_results[filename].actual_count = 0
 
     def count_batch_pages_concurrently(self, progress_callback=None):
-        logging.debug(f"Checking page counts for {self.batch_name} in tif directory: {self.output_dir}")
+        logging.debug(f"Checking page counts for {self.batch_name} in pdf directory: {self.output_dir}")
         future_to_filename = {}
         with ThreadPoolExecutor() as executor:
             for filename in self.counting_results.keys():
-                path = self.output_dir / f'{filename}{self.extension}'
+                path = self.output_dir / f'{filename}'
                 future = executor.submit(self.count_document_pages, filename, path)
                 future_to_filename[future] = filename
 
