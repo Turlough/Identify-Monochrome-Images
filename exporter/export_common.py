@@ -19,6 +19,8 @@ NUM_DATA_COLUMNS = int(os.getenv('NUM_DATA_COLUMNS', '2'))
 FILENAME_COLUMN = int(os.getenv('FILENAME_COLUMN', '1'))
 REPLACE_OUTPUT_FILES = os.getenv('REPLACE_OUTPUT_FILES', 'False').lower() == 'true'
 CONCURRENT_EXPORT = os.getenv('CONCURRENT_EXPORT', 'False').lower() == 'true'
+EXPORT_MPT = os.getenv('EXPORT_MPT', 'False').lower() == 'true'
+EXPORT_PDF = os.getenv('EXPORT_PDF', 'True').lower() == 'true'
 
 if REPLACE_OUTPUT_FILES:
     logging.info("REPLACE_OUTPUT_FILES is True, existing output files will be replaced")
@@ -29,6 +31,16 @@ if CONCURRENT_EXPORT:
     logging.info("CONCURRENT_EXPORT is True, using concurrent export")
 else:
     logging.info("CONCURRENT_EXPORT is False, using single-threaded export")
+
+if EXPORT_MPT:
+    logging.info("EXPORT_MPT is True, creating multipage TIFFs")
+else:
+    logging.info("EXPORT_MPT is False, not creating multipage TIFFs")
+
+if EXPORT_PDF:
+    logging.info("EXPORT_PDF is True, creating PDFs")
+else:
+    logging.info("EXPORT_PDF is False, not creating PDFs")
 
 def _read_import_list(import_file: str) -> List[List[str]]:
     """Read the import text/csv file into rows.
@@ -90,23 +102,25 @@ def _export_single_document(row: List[str], import_file: str, mpt_dir: Path, pdf
     tiff_success = False
     pdf_success = False
 
-    try:
-        if not REPLACE_OUTPUT_FILES and tiff_out.exists():
-            logging.info(f"TIFF already exists: {tiff_out}")
-            return doc_name, True, False
-        _save_multipage_tiff(tiff_out, images)
-        tiff_success = tiff_out.exists()
-    except Exception as e:
-        logging.error(f"Error saving TIFF for {doc_name}: {e}")
+    if EXPORT_MPT:
+        try:
+            if not REPLACE_OUTPUT_FILES and tiff_out.exists():
+                logging.info(f"TIFF already exists: {tiff_out}")
+                return doc_name, True, False
+            _save_multipage_tiff(tiff_out, images)
+            tiff_success = tiff_out.exists()
+        except Exception as e:
+            logging.error(f"Error saving TIFF for {doc_name}: {e}")
 
-    try:
-        if not REPLACE_OUTPUT_FILES and pdf_out.exists():
-            logging.info(f"PDF already exists: {pdf_out}")
-            return doc_name, True, False
-        _save_pdf(pdf_out, images)
-        pdf_success = pdf_out.exists()
-    except Exception as e:
-        logging.error(f"Error saving PDF for {doc_name}: {e}")
+    if EXPORT_PDF:
+        try:
+            if not REPLACE_OUTPUT_FILES and pdf_out.exists():
+                logging.info(f"PDF already exists: {pdf_out}")
+                return doc_name, True, False
+            _save_pdf(pdf_out, images)
+            pdf_success = pdf_out.exists()
+        except Exception as e:
+            logging.error(f"Error saving PDF for {doc_name}: {e}")
 
     return doc_name, tiff_success, pdf_success
 
@@ -133,25 +147,28 @@ def export_from_import_file(import_file: str) -> Tuple[int, int]:
         tiff_out = mpt_dir / f"{doc_name}.tif"
         pdf_out = pdf_dir / f"{doc_name}.pdf"
 
-        try:
-            if not REPLACE_OUTPUT_FILES and tiff_out.exists():
-                logging.info(f"TIFF already exists: {tiff_out}")
-                continue
-            _save_multipage_tiff(tiff_out, images)
-            num_tiffs += 1 if tiff_out.exists() else 0
-        except Exception as e:
-            logging.error(f"Error saving TIFF: {e}")
-            pass
+        if EXPORT_MPT:  
+            try:
+                if not REPLACE_OUTPUT_FILES and tiff_out.exists():
+                    logging.info(f"TIFF already exists: {tiff_out}")
+                    continue
+                
+                _save_multipage_tiff(tiff_out, images)
+                num_tiffs += 1 if tiff_out.exists() else 0
+            except Exception as e:
+                logging.error(f"Error saving TIFF: {e}")
+                pass
 
-        try:
-            if not REPLACE_OUTPUT_FILES and pdf_out.exists():
-                logging.info(f"PDF already exists: {pdf_out}")
-                continue
-            _save_pdf(pdf_out, images)
-            num_pdfs += 1 if pdf_out.exists() else 0
-        except Exception as e:
-            logging.error(f"Error saving PDF: {e}")
-            pass
+        if EXPORT_PDF:
+            try:
+                if not REPLACE_OUTPUT_FILES and pdf_out.exists():
+                    logging.info(f"PDF already exists: {pdf_out}")
+                    continue
+                _save_pdf(pdf_out, images)
+                num_pdfs += 1 if pdf_out.exists() else 0
+            except Exception as e:
+                logging.error(f"Error saving PDF: {e}")
+                pass
 
     return num_tiffs, num_pdfs
 
