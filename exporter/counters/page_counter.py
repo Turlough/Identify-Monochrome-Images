@@ -75,7 +75,11 @@ class PageCounter:
          The new file will have the same content as the original file, but with the rows do not have mismatched page counts.
          This file is to be used to rework the documents that have mismatched page counts.
         """
-        target_files = [page_count.filename.replace('.tif', '') for page_count in self.counting_results.values() if page_count.failed()]
+        target_files = [
+            os.path.splitext(page_count.filename)[0]
+            for page_count in self.counting_results.values()
+            if page_count.failed()
+        ]
         rework_lines = []
         with open(self.import_file, 'r', encoding='utf-8') as f:
             for line in f:
