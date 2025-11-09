@@ -8,7 +8,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import time
 import os
 from dotenv import load_dotenv
-from .export_pdf import _save_pdf
+from .export_smaller_pdf import _save_pdf
 from .export_mpt_imagemagick import _save_multipage_tiff
 
 logging.basicConfig(level=logging.INFO)

@@ -9,15 +9,26 @@ def _save_pdf(output_path: Path, images: List[Path]) -> None:
     try:
         for p in images:
             img = Image.open(str(p))
-            if img.mode in ('1', 'P'):
-                img = img.convert('RGB')
-            elif img.mode != 'RGB':
-                img = img.convert('RGB')
-            pil_images.append(img)
 
-        if not pil_images:
-            return
-        first, rest = pil_images[0], pil_images[1:]
+            if img.mode == "1":
+                processed = img
+            elif img.mode in ("L", "RGB"):
+                processed = img
+            elif img.mode == "P":
+                try:
+                    palette_mode = img.palette.mode if img.palette else None
+                except Exception:
+                    palette_mode = None
+                if palette_mode in ("RGB", "RGBA", "CMYK"):
+                    processed = img.convert("RGB")
+                else:
+                    processed = img.convert("L")
+            else:
+                processed = img.convert("RGB")
+
+            pil_images.append(processed)
+
+        first, *rest = pil_images
         first.save(str(output_path), save_all=True, append_images=rest)
     finally:
         for img in pil_images:
