@@ -21,6 +21,8 @@ max_size = 50 * 1024 * 1024
 search_folder = input("Enter the folder to search for EXPORT.TXT files: \n\t-> ")
 search_folder = search_folder.replace('&', '').replace('"', '').replace("'", "").strip()
 
+export_files = glob.glob(os.path.join(search_folder, "**", search_term), recursive=True)
+
 less_than_50mb_pdf_group = []
 greater_than_50mb_pdf_group = []
 less_than_50mb_mpt_group = []
@@ -33,8 +35,6 @@ less_than_50mb_pdf_file = os.path.join(search_folder, "less_than_50mb_pdf.csv")
 less_than_50mb_mpt_file = os.path.join(search_folder, "less_than_50mb_mpt.csv")
 greater_than_50mb_pdf_file = os.path.join(search_folder, "greater_than_50mb_pdf.csv")
 greater_than_50mb_mpt_file = os.path.join(search_folder, "greater_than_50mb_mpt.csv")
-
-export_files = glob.glob(os.path.join(search_folder, "**", search_term), recursive=True)
 
 # Clear the output files
 with open(less_than_50mb_pdf_file, 'w') as file:
