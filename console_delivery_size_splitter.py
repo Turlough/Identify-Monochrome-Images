@@ -10,42 +10,43 @@ We are then going to print the filenames of the files in each group.
 """
 
 
-import glob
+from tqdm import tqdm
 import os
 from exceptions import MissingFileException
 from exporter.export_common import get_all_export_files
 
 
-max_size = 50 * 1024 * 1024
+ # 50 MB
+KB = 1024
+MB = KB * KB
+max_bytes = 50 * MB
+total_pdf_size = 0
+total_mpt_size = 0
+
+header = "Batch,CustomerRef,Filename,Filepath,MPT_KB,PDF_KB\n"
 
 search_folder, export_files = get_all_export_files()
 
-less_than_50mb_pdf_group = []
-greater_than_50mb_pdf_group = []
-less_than_50mb_mpt_group = []
-greater_than_50mb_mpt_group = []
+small_files = []
+large_files = []
+small_files_count = 0
+large_files_count = 0
 
-less_than_50mb_group = []
-greater_than_50mb_group = []
 
-less_than_50mb_pdf_file = os.path.join(search_folder, "less_than_50mb_pdf.csv")
-less_than_50mb_mpt_file = os.path.join(search_folder, "less_than_50mb_mpt.csv")
-greater_than_50mb_pdf_file = os.path.join(search_folder, "greater_than_50mb_pdf.csv")
-greater_than_50mb_mpt_file = os.path.join(search_folder, "greater_than_50mb_mpt.csv")
+small_files_output = os.path.join(search_folder, "Small_File_List.csv")
+large_files_output = os.path.join(search_folder, "Large_File_List.csv")
+
 
 # Clear the output files
-with open(less_than_50mb_pdf_file, 'w') as file:
-    file.write("")
-with open(less_than_50mb_mpt_file, 'w') as file:
-    file.write("")
-with open(greater_than_50mb_pdf_file, 'w') as file:
-    file.write("")
-with open(greater_than_50mb_mpt_file, 'w') as file:
-    file.write("")
+with open(small_files_output, 'w') as file:
+    file.write(header)
+with open(large_files_output, 'w') as file:
+    file.write(header)
 
 print(f"Cleared output files")
+print(f"Reading {len(export_files)} EXPORT.TXT files")
 
-for export_file in export_files:
+for export_file in tqdm(export_files): 
 
     parent_folder = os.path.dirname(export_file)
     
@@ -54,7 +55,6 @@ for export_file in export_files:
 
     batch_name = os.path.basename(parent_folder)
 
-    print(f"Processing batch: {batch_name}")
 
     with open(export_file, 'r') as file:
         for line in file:
@@ -73,36 +73,45 @@ for export_file in export_files:
 
                     mpt_size = os.path.getsize(mpt_file)
                     pdf_size = os.path.getsize(pdf_file)
-                    # If either the MPT or PDF file is greater than 50MB, add it to the greater than 50MB group.
+                    total_pdf_size += pdf_size
+                    total_mpt_size += mpt_size
+                    mpt_kb = round(mpt_size / KB, 0)
+                    pdf_kb = round(pdf_size / KB, 0)
+
+                    # If either the MPT or PDF file is greater than max_size, add it to the greater than max_size group.
                     # include: batch_name, ref, name, file, mpt_size, pdf_size
-                    if mpt_size > max_size or pdf_size > max_size:
-                        greater_than_50mb_pdf_group.append((batch_name, ref, name, pdf_file, mpt_size, pdf_size))
-                        greater_than_50mb_mpt_group.append((batch_name, ref, name, mpt_file, mpt_size, pdf_size))
+                    if mpt_size > max_bytes or pdf_size > max_bytes:
+                        large_files.append((batch_name, ref, name, pdf_file, mpt_kb, pdf_kb))
+                        large_files_count += 1
                     else:
-                        less_than_50mb_pdf_group.append((batch_name, ref, name, pdf_file, mpt_size, pdf_size))
-                        less_than_50mb_mpt_group.append((batch_name, ref, name, mpt_file, mpt_size, pdf_size))
-    print(f"Less than 50MB PDF group: {len(less_than_50mb_pdf_group)}")
-    print(f"Less than 50MB MPT group: {len(less_than_50mb_mpt_group)}")
-    print(f"Greater than 50MB PDF group: {len(greater_than_50mb_pdf_group)}")
-    print(f"Greater than 50MB MPT group: {len(greater_than_50mb_mpt_group)}")
+                        small_files_count += 1
+                        small_files.append((batch_name, ref, name, pdf_file, mpt_kb, pdf_kb))
+
+print(f"""
+_REPORT_________________________________________________________
+Small: {small_files_count}
+Large: {large_files_count}
+Total: {small_files_count + large_files_count}
+Large Percentage: {large_files_count / (small_files_count + large_files_count) * 100:.1f}%
+PDFs: {total_pdf_size / MB:.1f} MB
+MPTs: {total_mpt_size / MB:.1f} MB
+_________________________________________________________
+""")
 
 
-    with open(less_than_50mb_pdf_file, 'a') as out_file:
-        print(f"Writing less than 50MB PDF group to file: {less_than_50mb_pdf_file}")
-        for batch_name, ref, name, pdf_path, mpt_size, pdf_size in less_than_50mb_pdf_group:
-            out_file.write(f"{batch_name},{ref},{name},{pdf_path},{pdf_size},{mpt_size}\n")
-    with open(less_than_50mb_mpt_file, 'a') as out_file:
-        print(f"Writing less than 50MB MPT group to file: {less_than_50mb_mpt_file}")
-        for batch_name, ref, name, mpt_path, mpt_size, pdf_size in less_than_50mb_mpt_group:
-            out_file.write(f"{batch_name},{ref},{name},{mpt_path},{pdf_size},{mpt_size}\n")
-    with open(greater_than_50mb_pdf_file, 'a') as out_file:
-        print(f"Writing greater than 50MB PDF group to file: {greater_than_50mb_pdf_file}")
-        for batch_name, ref, name, pdf_path, mpt_size, pdf_size in greater_than_50mb_pdf_group:
-            out_file.write(f"{batch_name},{ref},{name},{pdf_path},{pdf_size},{mpt_size}\n")
-    with open(greater_than_50mb_mpt_file, 'a') as out_file:
-        print(f"Writing greater than 50MB MPT group to file: {greater_than_50mb_mpt_file}")
-        for batch_name, ref, name, mpt_path, mpt_size, pdf_size in greater_than_50mb_mpt_group:
-            out_file.write(f"{batch_name},{ref},{name},{mpt_path},{pdf_size},{mpt_size}\n")
+if input("Create the output files (large and small)? (y/n): ") != "y":
+    exit()
 
-    print(f"Done processing batch: {batch_name}")
-print(f"Done processing all batches")
+print(f"Sorting by filename")
+small_files.sort(key=lambda x: x[1])
+large_files.sort(key=lambda x: x[1])
+
+print(f"Writing small files to {small_files_output}")
+with open(small_files_output, 'a') as out_file:
+    for batch_name, ref, name, pdf_path, mpt_size, pdf_size in small_files:
+        out_file.write(f"{batch_name},{ref},{name},{pdf_path},{mpt_size},{pdf_size}\n")
+
+print(f"Writing large files to {large_files_output}")
+with open(large_files_output, 'a') as out_file:
+    for batch_name, ref, name, pdf_path, mpt_size, pdf_size in large_files:
+        out_file.write(f"{batch_name},{ref},{name},{pdf_path},{pdf_size},{mpt_size}\n")
