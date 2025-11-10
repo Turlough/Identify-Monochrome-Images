@@ -3,7 +3,7 @@ import os
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from typing import List
 from PyQt6.QtCore import QThread, pyqtSignal
-from color_detector import ColorDetector
+from cv_color_detector import ColorDetector
 
 
 class ColorAnalysisThread(QThread):
