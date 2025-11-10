@@ -1,4 +1,5 @@
 import csv
+import glob
 from pathlib import Path
 from typing import List, Tuple
 import logging
@@ -254,4 +255,16 @@ def export_from_import_file_concurrent(import_file: str, progress_callback=None)
     
     return num_tiffs, num_pdfs
 
+def get_all_export_files() -> Tuple[str, List[Path]]:
+    """
+    Console request for the folder to search in for EXPORT.TXT files.
+    e.g. The job folder
+    
+    Returns a tuple of (search_folder, export_files)
+    """
+    search_term = "EXPORT.TXT"
 
+    search_folder = input("Enter the folder to search for EXPORT.TXT files: \n\t-> ")
+    search_folder = search_folder.replace('&', '').replace('"', '').replace("'", "").strip()
+
+    return search_folder, glob.glob(os.path.join(search_folder, "**", search_term), recursive=True)

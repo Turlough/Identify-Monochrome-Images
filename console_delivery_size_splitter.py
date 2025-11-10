@@ -1,27 +1,24 @@
-# EXPORT.TXT is the filename we are searching for. 
-# Each EXPORT.TXT file will have a list image files.
-# We are searching for the term "EXPORT.TXT" in the current directory and all subdirectories.
-# We are then going to split the files into two groups based on the size of the file.
-# The first group will be the files that are less than 50MB.
-# The second group will be the files that are greater than 50MB.
-# We are then going to print the filenames of the files in each group.
+"""
+This script is used to split the files into two groups based on the size of the file.
+
+The user is prompted to enter the folder to search for EXPORT.TXT files.
+The script will then search for the term "EXPORT.TXT" in the current directory and all subdirectories.
+The script will then split the files into two groups based on the size of the file.
+The first group will be the files that are less than 50MB.
+The second group will be the files that are greater than 50MB.
+We are then going to print the filenames of the files in each group.
+"""
 
 
 import glob
 import os
+from exceptions import MissingFileException
+from exporter.export_common import get_all_export_files
 
-class MissingFileException(Exception):
-    def __init__(self, message):
-        self.message = message
-        super().__init__(self.message)
 
-search_term = "EXPORT.TXT"
 max_size = 50 * 1024 * 1024
 
-search_folder = input("Enter the folder to search for EXPORT.TXT files: \n\t-> ")
-search_folder = search_folder.replace('&', '').replace('"', '').replace("'", "").strip()
-
-export_files = glob.glob(os.path.join(search_folder, "**", search_term), recursive=True)
+search_folder, export_files = get_all_export_files()
 
 less_than_50mb_pdf_group = []
 greater_than_50mb_pdf_group = []
