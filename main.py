@@ -14,11 +14,11 @@ from PyQt6.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout,
                             QProgressDialog, QDialog, QProgressBar)
 from PyQt6.QtCore import Qt, QThread, pyqtSignal, QSize, QTimer, QRect, QPoint
 from PyQt6.QtGui import QPixmap, QAction, QFont, QCursor, QColor, QPainter, QPen
-from color_detector import ColorDetector
+from cv_color_detector import ColorDetector
 from exporter import export_from_import_file, export_from_import_file_concurrent
 from thumbnails import ThumbnailWidget
 
-from color_analyser import ColorAnalysisThread
+from qt_color_analyser import ColorAnalysisThread
 from image_converter import ImageConverter, convert_image_to_g4_tiff
 from dotenv import load_dotenv
 from thumbnail_loader import ThumbnailLoader
