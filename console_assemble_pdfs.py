@@ -3,7 +3,7 @@ This script takes the Small_File_List.csv and Large_File_List.csv files and asse
 These are produced by the console_delivery_size_splitter.py script.
 The script will prompt the user for the folder to search for the 'File_List" files.
 
-PDF and MPT files are handled differently.
+PDF and MPT files are handled differently. This script is for PDFs.
 
 PDFs:
 For each file path in the 'File_List' files, the script will copy the image files to the final delivery folders.
@@ -11,25 +11,22 @@ The script will also create a manifest.txt file in the final delivery folders.
 The manifest.txt file will contain the list of files in the final delivery.
 The script will also create a manifest.txt file in the final delivery folders.
 
-No delivery folder may exceed 9.5 GB in size.
+No delivery folder may exceed max_bytes in size.
 
 The final delivery folders will be named "PDFs_small_x" and "PDFs_large_x" 
 where x increments from 1 each time a new delivery folder is created 
-(i.e. The previous delivery folder is larger than 9.5 GB").
+(i.e. The previous delivery folder is larger than max_bytes").
 
-MPTs:
-TODO: later.
 """
 import os
 import shutil
-
 from tqdm import tqdm
 
 
 KB = 1024
 MB = KB * KB
 GB = MB * KB
-max_bytes = 9.5 * GB
+max_bytes = 30 * GB
 
 select_folder = input("Select the folder to search for the 'File_List' files: ")
 small_file_list = os.path.join(select_folder, "Small_File_List.csv")
@@ -48,6 +45,7 @@ total_large_size = 0
 large_delivery_folder_count = 1
 large_delivery_folder = os.path.join(select_folder, f"PDFs_large_{large_delivery_folder_count}")
 os.makedirs(large_delivery_folder, exist_ok=True)
+
 
 
 with open(small_file_list, 'r') as file:
