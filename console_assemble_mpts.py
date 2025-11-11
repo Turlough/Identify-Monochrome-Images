@@ -82,8 +82,6 @@ with open(small_file_list, 'r') as file:
         dest_file = os.path.join(images_folder, rel_filename)
         mpt_size = float(cells[4].strip())
 
-        small_files.append((customer_ref, rel_filename))
-
         if not os.path.exists(dest_file):
             shutil.copy(source_file, dest_file)
 
