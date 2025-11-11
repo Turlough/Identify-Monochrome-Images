@@ -1,0 +1,27 @@
+This is the output folder structure for MPTs:
+
+-MPTS_Large_1       Folder- this name will change to MPTS_Large_2, etc
+--APP_SPEC          Subfolder
+---XFERDATA         SubSubfolder
+----CDDOC.DAT       This is the manifest file
+--IMAGES            Subfolder
+---0001             SubSubfolder
+----file1.tif       All the image files
+----file2.tif       etc
+----file3.tif
+----etc.
+
+
+
+CDDOC.DAT structure:
+
+Sample three lines:
+0001;SL025-091----; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;\IMAGES\0001\file1.tif;TIFF;0;0;0;0;
+0001;WX042-089----; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;\IMAGES\0001\file2.tif;TIFF;0;0;0;0;
+0001;DG021-008016-; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;\IMAGES\0001\file3.tif;TIFF;0;0;0;0;
+
+The only variable columns are columns 2 and 21
+Column 2 is the Reference code. Column 21 is the filename, preceded by \IMAGES\0001\
+
+That is, as python f-string:
+f"0001;{ref_code}; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ; ;\IMAGES\0001\{file_name};TIFF;0;0;0;0;"
