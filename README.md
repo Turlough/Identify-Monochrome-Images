@@ -23,7 +23,7 @@ and the source text file is updated with the new filename.
 The ticked items (i.e. the tiffs) are removed from the thumbnail grid.
 
 ## The input file
-See (sample_import_file.txt)
+See [examples_and_samples/EXPORT.TXT]
 
 The input file is a text file (.txt, .csv) with a comma separated list.
 The first item in each row is the filename (without extension) of the final document. For now, disregard this.
